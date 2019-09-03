@@ -34,7 +34,7 @@ class netcdf(object):
 
         Returns
         -------
-        validFile : boolean for existence. 
+        validFile : boolean for existence.
         '''
         validFile=False
         if os.path.isfile(fname):
@@ -82,7 +82,7 @@ class netcdf(object):
         self.variables=list(self.data.variables.keys())
         self.coords=list(self.data.dimensions.keys())
         self.ndim=len(self.coords)
-        if len(self.variables)>0:
+        if len(self.variables)>0:            
             v=self.variables[0]
             self.varshape=self.data[v].shape
 
