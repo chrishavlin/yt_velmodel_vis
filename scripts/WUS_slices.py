@@ -25,6 +25,8 @@ if __name__=='__main__':
     data={}
     data['dvs']=model.data.variables['dvs'][:]
     data['dvs'][data['dvs']>900.00000]=np.nan
+    data['dvs'][data['dvs']>=0]=np.nan
+    data['dvs']=data['dvs']*-1
     data['dvs'] = np.transpose(data['dvs'], (2, 1, 0))
 
     sc_mult=1.0 # scale multiplier
@@ -37,7 +39,7 @@ if __name__=='__main__':
     for d_slice in [100.,150.,200.,250.]:
         cnt=[clon,clat,d_slice]
         slc=yt.SlicePlot(ds,'z','dvs',center=cnt)
-        slc.set_log("dvs", False)
+        # slc.set_log("dvs", False)
         slc.set_xlabel("latitude")
         slc.set_ylabel("longitude")
         slc.set_cmap('dvs', 'gist_heat')

@@ -5,6 +5,7 @@ classes for initial loads and processing of seismic models for use with yt
 '''
 from netCDF4 import Dataset
 import os
+import numpy as np
 
 class netcdf(object):
     '''
@@ -79,11 +80,111 @@ class netcdf(object):
                 print("fname required for seis_model.netcdf.load()")
 
         self.data=Dataset(fname)
-        self.variables=list(self.data.variables.keys())
-        self.coords=list(self.data.dimensions.keys())
+
+        self.setUsefulInfo()
+        self.coordTransform()
+
+        return
+
+    def setUsefulInfo(self):
+        '''
+        setUsefulInfo()
+
+        copies netcdf characteristics to attributes for easy access
+
+        '''
+
+        self.coords={}
+        for key, value in self.data.dimensions.items():
+            self.coords[key]=value.size
         self.ndim=len(self.coords)
-        if len(self.variables)>0:            
-            v=self.variables[0]
-            self.varshape=self.data[v].shape
+
+        self.varinfo={}
+        for key,value in self.data.variables.items():
+            if key not in list(self.coords.keys()):
+                self.varinfo[key]={'shape':value.shape}
+
+        return
+
+    def coordTransform(self,method='geo2spherical'):
+        '''
+        coordTransform
+
+        some coordinate transforms
+        '''
+
+        if method=='geo2spherical':
+            # convert lat/lon/depth to spherical coordinates:
+            # phi = azimuth (longitudinal), 0 <= phi <= 2 pi
+            # theta = angle from pole (inclination), 0 <= theta <= pi
+            #Note that in yt, "spherical" means that it is ordered $r$, $\theta$, $\phi$,
+            # where $\theta$ is the declination from the azimuth (running from $0$ to $\pi$
+            # and $\phi$ is the angle around the zenith (running from $0$ to $2\pi$).
+            lon=np.array(self.data.variables['longitude'])
+            lon[lon<0.]=lon[lon<0]+360.
+
+            if 'depth' in self.coords.keys():
+                Radius = 6371 -np.array(self.data.variables['depth'])
+            elif 'radius' in self.coords.keys():
+                Radius = np.array(self.data.variables['radius'])
+            else:
+                print("depth/radius coordinate not found!")
+
+            self.spherical={
+                'theta':(90. -np.array(self.data.variables['latitude']))*np.pi/180.,
+                'phi':lon*np.pi/180.,
+                'R':Radius / 6371.
+            }
+
+            self.spherical['bounds']={}
+            for crd in ['phi','theta','R']:
+                self.spherical['bounds'][crd]=[self.spherical[crd].min(),
+                                               self.spherical[crd].max()]
+
+            self.spherical['bbox']=np.array([
+                self.spherical['bounds']['R'],
+                self.spherical['bounds']['theta'],
+                self.spherical['bounds']['phi']
+            ])
+
+        elif method=='sphere2cart':
+            # create 3d meshgrid, preserving the variable dimension ordering
+            var=list(self.varinfo.keys())[0]
+            ordr=self.data.variables[var].dimensions
+
+            newdims=np.meshgrid(np.array(self.data.variables[ordr[0]]),
+                                np.array(self.data.variables[ordr[1]]),
+                                np.array(self.data.variables[ordr[2]]),
+                                indexing='ij')
+            crds={}
+            for idim in range(0,3):
+                crds[ordr[idim]]=newdims[idim]
+            crds['lat']=crds['latitude']
+            crds['lon']=crds['longitude']
+
+            # assume lat/lon points lie on perfect sphere
+            crds['depth'] =6371. - crds['depth'] # depth is now Radius
+            crds['lat'] = ( 90. - crds['lat'] ) * np.pi / 180. # lat is now deg from North
+            crds['lon'][crds['lon']<0.0]=crds['lon'][crds['lon']<0.0]+360.
+            crds['lon'] = crds['lon'] * np.pi / 180.
+
+            self.cart={
+                'X':crds['depth'] * np.sin(crds['lat']) * np.sin(crds['lon'])*1000.,
+                'Y':crds['depth'] * np.sin(crds['lat']) * np.cos(crds['lon'])*1000.,
+                'Z':crds['depth'] * np.cos(crds['lat'])*1000.
+            }
+
+            self.cart['bounds']={}
+            for crd in ['X','Y','Z']:
+                self.cart['bounds'][crd]=[self.cart[crd].min(),
+                                               self.cart[crd].max()]
+
+            self.cart['bbox']=np.array([
+                self.cart['bounds']['X'],
+                self.cart['bounds']['Y'],
+                self.cart['bounds']['Z']
+            ])
+        else:
+            print(method + " is not a defined method")
 
         return
