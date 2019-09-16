@@ -7,6 +7,26 @@ from netCDF4 import Dataset
 import os
 import numpy as np
 
+
+def sphere2cart(phi,theta,radius):
+    '''
+    sphere2cart
+
+    Parameters
+    ----------
+    phi: angle from north in radians (0 = north pole)
+    theta: latitudinal angle in radians
+    radius: radius, in any units
+
+    Returns
+    -------
+    (x,y,z) : tuple of cartesian x,y,z in units of radus
+    '''
+    x=radius * np.sin(phi) * np.sin(theta)
+    y=radius * np.sin(phi) * np.cos(theta)
+    z=radius * np.cos(phi)
+    return (x,y,z)
+
 class netcdf(object):
     '''
     netcdf
@@ -168,11 +188,8 @@ class netcdf(object):
             crds['lon'][crds['lon']<0.0]=crds['lon'][crds['lon']<0.0]+360.
             crds['lon'] = crds['lon'] * np.pi / 180.
 
-            self.cart={
-                'X':crds['depth'] * np.sin(crds['lat']) * np.sin(crds['lon'])*1000.,
-                'Y':crds['depth'] * np.sin(crds['lat']) * np.cos(crds['lon'])*1000.,
-                'Z':crds['depth'] * np.cos(crds['lat'])*1000.
-            }
+            X,Y,Z=sphere2cart(crds['lat'],crds['lon'],crds['depth']*1000.)
+            self.cart={'X':X,'Y':Y,'Z':Z}
 
             self.cart['bounds']={}
             for crd in ['X','Y','Z']:

@@ -17,6 +17,7 @@ if __name__=='__main__':
     data['dvs'][data['dvs']>900.00000]=np.nan
     data['dvs'][data['dvs']>=0]=np.nan
     data['dvs']=data['dvs']*-1
+    data['dvs']=np.flipud(data['dvs'])
 
     # yt spherical expects R, theta, phi (depth, ~lat,~lon)
     sc_mult=1.0 # scale multiplier
@@ -29,8 +30,10 @@ if __name__=='__main__':
     # sc.camera.roll(np.pi/6)
     # cam = sc.add_camera()
     # cam.resolution=1000
-    tf = yt.ColorTransferFunction((-2, 2))
+    tf = yt.ColorTransferFunction((0, 5))
     tf.add_layers(10, w=0.01)
+
     source = sc.sources['source_00']
+    source.tfh.set_log(False)
     source.set_transfer_function(tf)
-    sc.save('volumetest.png',sigma_clip=6)
+    sc.save(os.path.join(out_dir,'WUS_volume.png'),sigma_clip=3)
