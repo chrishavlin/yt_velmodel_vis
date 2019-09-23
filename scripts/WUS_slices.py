@@ -21,12 +21,12 @@ if __name__=='__main__':
     for bnd in [0,1]:
         if bnds['latitude'][bnd] > 180:
             bnds['latitude'][bnd]=bnds['latitude'][bnd]-360
-
+    clalon=(np.mean(bnds['latitude']),np.mean(bnds['longitude']))
     data={}
     data['dvs']=model.data.variables['dvs'][:]
     data['dvs'][data['dvs']>900.00000]=np.nan
-    data['dvs'][data['dvs']>=0]=np.nan
-    data['dvs']=data['dvs']*-1
+    # data['dvs'][data['dvs']>=0]=np.nan
+    # data['dvs']=data['dvs']*-1
     data['dvs'] = np.transpose(data['dvs'], (2, 1, 0))
 
     sc_mult=1.0 # scale multiplier
@@ -36,12 +36,12 @@ if __name__=='__main__':
 
     clon=np.mean(bnds['longitude'])
     clat=np.mean(bnds['latitude'])
-    for d_slice in [100.,150.,200.,250.]:
+    for d_slice in [100.,150.,200.,250.,300,350,400]:
         cnt=[clon,clat,d_slice]
         slc=yt.SlicePlot(ds,'z','dvs',center=cnt)
-        # slc.set_log("dvs", False)
-        slc.set_xlabel("latitude")
-        slc.set_ylabel("longitude")
+        slc.set_log("dvs", False)
+        slc.set_ylabel("lat - center lat")
+        slc.set_xlabel("lon - center lon")
         slc.set_cmap('dvs', 'gist_heat')
-        slc.annotate_title("Depth = "+str(int(d_slice))+' km')
+        slc.annotate_title("Depth = "+str(int(d_slice))+' km, C='+str(clalon))
         slc.save(os.path.join(out_dir,'Slice_'+str(int(d_slice))))
