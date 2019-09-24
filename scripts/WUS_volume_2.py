@@ -96,4 +96,4 @@ if __name__=='__main__' or gogo:
     ax.auto_scale_xyz(bounds[0,:], bounds[1,:], bounds[2,:])
 
     plt.savefig('output/WUS_isosurf_'+str(isoval)+'.png')
-    # plt.close('all')
+    plt.close('all')
