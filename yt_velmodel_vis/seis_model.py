@@ -6,7 +6,7 @@ classes for initial loads and processing of seismic models for use with yt
 from netCDF4 import Dataset
 import os
 import numpy as np
-
+import yt
 
 def sphere2cart(phi,theta,radius):
     '''
@@ -203,5 +203,59 @@ class netcdf(object):
             ])
         else:
             print(method + " is not a defined method")
+
+        return
+
+    def generateDepthSlices(self,dfield,depths=[],ds=None,latlonRnge=None,
+        outDir=None,bbox=None,SavePrefix='',data_min=None,data_max=None,fillval=np.nan):
+        '''generateDepthSlices()
+        generates depth slices naively using uniform data loader
+        
+        '''
+        if latlonRnge is None:
+            bnds={
+            'longitude':[float(self.data.geospatial_lon_min),
+                        float(self.data.geospatial_lon_max)],
+            'latitude':[float(self.data.geospatial_lat_min),
+                        float(self.data.geospatial_lat_max)],
+            'depth':[float(self.data.geospatial_vertical_min),
+                    float(self.data.geospatial_vertical_max)]
+            }
+
+            for bnd in [0,1]:
+                if bnds['latitude'][bnd] > 180:
+                   bnds['latitude'][bnd]=bnds['latitude'][bnd]-360
+        else:
+            bnds=latlonRnge
+
+        clalon=(np.mean(bnds['latitude']),np.mean(bnds['longitude']))
+        data={}
+        data[dfield]=self.data.variables[dfield][:]
+        data[dfield] = np.transpose(data[dfield], (2, 1, 0))
+        data[dfield][data[dfield]==self.data[dfield].missing_value]=fillval
+
+        if data_min is not None:
+            data[dfield][data[dfield]<data_min]=fillval
+
+        if data_max is not None:
+            data[dfield][data[dfield]>data_max]=fillval
+
+        if ds is None:
+            sc_mult=1.0 # scale multiplier
+            bbox = np.array([bnds['longitude'],bnds['latitude'],bnds['depth']])
+            ds = yt.load_uniform_grid(data,data[dfield].shape,sc_mult,bbox=bbox,nprocs=1,periodicity=(False,False,False))
+
+        clon=np.mean(bnds['longitude'])
+        clat=np.mean(bnds['latitude'])
+        for d_slice in depths:
+            cnt=[clon,clat,d_slice]
+            slc=yt.SlicePlot(ds,'z',dfield,center=cnt)
+            slc.set_log(dfield, False)
+            slc.set_ylabel("lat - center lat")
+            slc.set_xlabel("lon - center lon")
+            slc.set_cmap(dfield, 'gist_heat')
+            slc.annotate_title("Depth = "+str(int(d_slice))+' km, C='+str(clalon))
+            if outDir is not None:
+               slc.save(os.path.join(outDir,SavePrefix+'_slice_'+str(int(d_slice))))
 
         return
