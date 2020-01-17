@@ -1,6 +1,6 @@
 """
 A helper class to build, display, and modify transfer functions for volume
-rendering. ---- copied from source, modifying here for use outside of a
+rendering. ---- copied from yt source, modifying here for use outside of a
 jupyter notebook
 """
 
@@ -136,7 +136,7 @@ class TransferFunctionHelper(object):
         self.tf.add_layers(10, colormap=colormap_name)
         factor = self.tf.funcs[-1].y.size / self.tf.funcs[-1].y.sum()
         self.tf.funcs[-1].y *= 2*factor
-
+    
     def plot(self, fn=None, profile_field=None, profile_weight=None, ipython=True):
         """
         Save the current transfer function to a bitmap, or display

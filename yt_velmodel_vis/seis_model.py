@@ -210,7 +210,7 @@ class netcdf(object):
         outDir=None,bbox=None,SavePrefix='',data_min=None,data_max=None,fillval=np.nan):
         '''generateDepthSlices()
         generates depth slices naively using uniform data loader
-        
+
         '''
         if latlonRnge is None:
             bnds={
@@ -258,4 +258,110 @@ class netcdf(object):
             if outDir is not None:
                slc.save(os.path.join(outDir,SavePrefix+'_slice_'+str(int(d_slice))))
 
+        return
+
+    # def addBoundaryHighlights(self,data_field,bound_vals,data=None,newFill=None):
+    #     '''
+    #     sets the values of the data on the boundaries to specified values and
+    #     returns the modified data array. When volume rendering, add TF gaussians
+    #     at these boundary values to highlight the domain extents.
+    #
+    #     Parameters
+    #     ----------
+    #     data_field   the data field to set and return
+    #     bound_vals   dict, the boundary values to set. e.g.,:
+    #             bound_vals={'x':[9999.,9998],'y':[9997.,9996],'z':[9995.,9994]}
+    #     data    (optional) the data array. If None, will pull data_field from
+    #             loaded dataset
+    #
+    #     '''
+    #
+    #     try:
+    #         dims = list(self.data.variables[data_field].dimensions)
+    #         if data is None:
+    #             data = self.data.variables[data_field][:]
+    #     except:
+    #         raise ValueError('netcdf object does not have data loaded')
+    #
+    #     if newFill is not None:
+    #         data.fill_value=newFill
+    #
+    #     for dim in dims:
+    #         print(dim)
+    #         if dim in bound_vals.keys():
+    #             vals=bound_vals[dim]
+    #             print(vals)
+    #             this_dim=self.data.variables[dim][:]
+    #             data[this_dim==this_dim.min()]=vals[0]
+    #             data[this_dim==this_dim.max()]=vals[1]
+    #     return data
+
+    def moveToUnstructured(self,fields=[]):
+        '''
+        moves regular geo-spherical mesh to unstructured mesh in x,y,z
+
+        (x,y,z)=(0,0,0) is planet center
+
+        data should be depth, latitude, longitude coords
+        '''
+
+        uData={}
+
+        # calculate x,y,z from regular geo-spherical data
+        self.coordTransform('sphere2cart') # builds self.cart={'X':X,'Y':Y,'Z':Z}
+        print("coord transformed!")
+
+        # initialize data value store
+        if len(fields)>0:
+            data1d={} # data arrays in 1d
+            uData['data']={} # data values on vertices for each element
+            for fi in fields:
+                print("copying "+fi)
+                uData['data']['connect1',fi]=[]
+                data1d[fi] = self.data.variables[fi][:].data.ravel() # 1d data array
+
+        # build the array of all vertices. cartesian is already 3d
+        print("building X,Y,Z")
+        X=self.cart['X'].ravel()
+        Y=self.cart['Y'].ravel()
+        Z=self.cart['Z'].ravel()
+
+        uData['vertices']=[[X[i],Y[i],Z[i]] for i in range(0,len(X))]
+        uData['vertices']=np.array(uData['vertices'])
+        uData['vertices']=np.float64(uData['vertices'])
+
+        # build the connectivity array for uniform spherical volume elements
+        # X,Y,Z=sphere2cart(crds['lat'],crds['lon'],crds['depth']*1000.)
+        Nx = len(self.cart['X'][0][0]) # verts in x
+        Ny = len(self.cart['X'][0]) # verts in y
+        Nz = len(self.cart['X']) # verts in z
+        N = Nx*Nz*Ny # number of verts
+        print("total verts [x,y,z,total,len()]: ")
+        print([Nx,Ny,Nz,N,len(X)])
+        Neles=(Nx-1)*(Ny-1)*(Nz-1) # number of elements
+        print("total elements: "+str(Neles))
+        M = 8 # vertices per element
+        uData['cnnct']=[] # connnectivity array (wihch vertex for each element)
+        for ele in range(0,Neles):
+
+            verts = [
+                ele, ele + 1,
+                ele + Nx, ele + Nx + 1,
+                ele + Nx * Ny, ele + Ny*Nx + 1,
+                ele + Nx * Ny + Nx, ele + Ny*Nx + Nx + 1
+            ]
+
+            uData['cnnct'].append(verts) # indeces of vertices
+
+            if len(fields)>0:
+                for fi in fields:
+                    uData['data']['connect1',fi].append(data1d[fi][verts])
+        #
+        # convert final to np arrays
+        uData['cnnct']=np.array(uData['cnnct'])
+        if len(fields)>0:
+            for fi in fields:
+                uData['data']['connect1',fi]=np.array(uData['data']['connect1',fi])
+
+        setattr(self,'unstructured',uData)
         return

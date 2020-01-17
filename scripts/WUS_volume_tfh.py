@@ -43,7 +43,7 @@ if __name__=='__main__' or gogo:
     tfh = TransferFunctionHelper(ds)
     tfh.set_field('dvs')
     tfh.set_log(False)
-    tfh.set_bounds()
+    tfh.set_bounds(bounds=[data['dvs'].min(),data['dvs'].max()])
     print(tfh.bounds)
     tfh.build_transfer_function()
     tfh.tf.add_layers(5)
