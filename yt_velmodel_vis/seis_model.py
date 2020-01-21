@@ -15,7 +15,7 @@ def sphere2cart(phi,theta,radius):
     Parameters
     ----------
     phi: angle from north in radians (0 = north pole)
-    theta: latitudinal angle in radians
+    theta: longitudinal angle in radians
     radius: radius, in any units
 
     Returns
