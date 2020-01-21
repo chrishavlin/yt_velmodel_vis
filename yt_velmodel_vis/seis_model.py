@@ -296,7 +296,7 @@ class netcdf(object):
     #             data[this_dim==this_dim.max()]=vals[1]
     #     return data
 
-    def moveToUnstructured(self,fields=[]):
+    def moveToUnstructured(self,fields=[],coordfields=[]):
         '''
         moves regular geo-spherical mesh to unstructured mesh in x,y,z
 
@@ -319,6 +319,13 @@ class netcdf(object):
                 print("copying "+fi)
                 uData['data']['connect1',fi]=[]
                 data1d[fi] = self.data.variables[fi][:].data.ravel() # 1d data array
+
+        # add spherical coordinate fields
+        if len(coordfields)>0:
+            if 'radius' in coordfields:
+                uData['data']['connect1','radius']=[]#np.sqrt(X**2+Y**2+Z**2)
+            elif 'depth' in coordfields:
+                uData['data']['connect1','depth']=[]#6371000. - np.sqrt(X**2+Y**2+Z**2)
 
         # build the array of all vertices. cartesian is already 3d
         print("building X,Y,Z")
@@ -356,12 +363,21 @@ class netcdf(object):
             if len(fields)>0:
                 for fi in fields:
                     uData['data']['connect1',fi].append(data1d[fi][verts])
-        #
+
+            xverts=X[verts]
+            yverts=Y[verts]
+            zverts=Z[verts]
+            if 'radius' in coordfields:
+                uData['data']['connect1','radius'].append(np.sqrt(xverts**2+yverts**2+zverts**2))
+            elif 'depth' in coordfields:
+                uData['data']['connect1','depth'].append(6371000.-np.sqrt(xverts**2+yverts**2+zverts**2))
+
+
         # convert final to np arrays
         uData['cnnct']=np.array(uData['cnnct'])
-        if len(fields)>0:
-            for fi in fields:
-                uData['data']['connect1',fi]=np.array(uData['data']['connect1',fi])
+        for fi in fields + coordfields:
+            uData['data']['connect1',fi]=np.array(uData['data']['connect1',fi])
+
 
         setattr(self,'unstructured',uData)
         return
