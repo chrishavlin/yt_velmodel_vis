@@ -7,6 +7,7 @@ from netCDF4 import Dataset
 import os
 import numpy as np
 import yt
+from scipy import spatial
 
 def sphere2cart(phi,theta,radius):
     '''
@@ -26,6 +27,16 @@ def sphere2cart(phi,theta,radius):
     y=radius * np.sin(phi) * np.cos(theta)
     z=radius * np.cos(phi)
     return (x,y,z)
+
+def cart2sphere(x,y,z,geo=True):
+    xy = x**2 + y**2
+    R = np.sqrt(xy + z**2)
+    lat = np.arctan2(np.sqrt(xy), z)*180./np.pi
+    lon = np.arctan2(y, x)*180./np.pi
+    if geo:
+        lat = lat - 90. # equator is at 0, +90 is N pole
+
+    return (R,lat,lon)
 
 class netcdf(object):
     '''
@@ -380,4 +391,141 @@ class netcdf(object):
 
 
         setattr(self,'unstructured',uData)
+        return
+
+    def interp2cartesian(self,fields=[],res=[10,10,10], input_units='km',max_dist=100):
+        ''' moves geo-spherical data (radius/depth, lat, lon) to earth-centered
+            cartesian coordinates using a kdtree
+
+        parameters
+        ----------
+        fields: the fields to interpolate to the grid
+        res: list of resolution in x,y,z
+        input_units: the units of res (final coord system will be in these units)
+        '''
+
+        self.interp={}
+
+        if len(fields)==0:
+            print("no fields provided, building grid only")
+
+        if getattr(self,'cart',None) is None:
+            # get cartesian coordinates of the data (no interpolation here)
+            self.coordTransform('sphere2cart') # builds self.cart={'X':X,'Y':Y,'Z':Z}
+
+        # do interpolation in meters, build res dict
+        res = np.array(res)
+        if input_units=='km':
+            res=res * 1000. # coord transform are in m
+            max_dist=max_dist*1000.
+        res = dict(zip(['X','Y','Z'],list(res)))
+
+        # build dimensional info
+        dimInfo={}
+        for dim in ['X','Y','Z']:
+            dimInfo[dim]={
+                1:self.cart['bounds'][dim][1],
+                0:self.cart['bounds'][dim][0],
+                'delta':abs(self.cart['bounds'][dim][1]-self.cart['bounds'][dim][0])
+            }
+            dimInfo[dim]['N']=int(dimInfo[dim]['delta']/res[dim])
+
+        # store bounding box here too
+        self.interp['bbox']=np.array([
+            self.cart['bounds']['X'],
+            self.cart['bounds']['Y'],
+            self.cart['bounds']['Z']
+        ])
+
+        # build the 1d spatial vectors
+        X=np.linspace(dimInfo['X'][0],dimInfo['X'][1],dimInfo['X']['N'])
+        Y=np.linspace(dimInfo['Y'][0],dimInfo['Y'][1],dimInfo['Y']['N'])
+        Z=np.linspace(dimInfo['Z'][0],dimInfo['Z'][1],dimInfo['Z']['N'])
+        self.interp['grid']={'x':X,'y':Y,'z':Z}
+
+        # interpolate data fields onto the grid, ignore fill values
+        if len(fields)>0:
+            print("interpolating to cartesian bounding box")
+
+            # self.cart['X']={'X':X,'Y':Y,'Z':Z} The cartesian coords of data are here
+            xdata=self.cart['X'].ravel()
+            ydata=self.cart['Y'].ravel()
+            zdata=self.cart['Z'].ravel()
+
+            self.interp['data']={}
+            trees={}
+            for fi in fields:
+                # build kdtree of non-null data for each variable
+                fillval=getattr(self.data.variables[fi],'missing_value',np.nan)
+                data=self.data.variables[fi][:].data.ravel()
+                x_fi=xdata[data!=fillval]
+                y_fi=ydata[data!=fillval]
+                z_fi=zdata[data!=fillval]
+                data=data[data!=fillval]
+                xyz=np.column_stack((x_fi,y_fi,z_fi))
+                print("building kd tree for "+fi)
+                trees[fi]={'tree':spatial.KDTree(xyz),'data':data}
+                print("  kd tree built")
+
+                # initialize interpolated field
+                self.interp['data'][fi]=np.nan*np.ones((dimInfo['X']['N'],dimInfo['Y']['N'],dimInfo['Z']['N']))
+
+            # fill the interpolated field
+            # X=np.linspace(dimInfo['X'][0],dimInfo['X'][1],dimInfo['X']['N'])
+            # Y=np.linspace(dimInfo['Y'][0],dimInfo['Y'][1],dimInfo['Y']['N'])
+            # Z=np.linspace(dimInfo['Z'][0],dimInfo['Z'][1],dimInfo['Z']['N'])
+
+            # assemble points to query
+            pts=[]
+            dep_r=[np.min(self.data.variables['depth'][:])*1000.,
+                    np.max(self.data.variables['depth'][:])*1000.]
+            lat_r=[np.min(self.data.variables['latitude'][:]),
+                    np.max(self.data.variables['latitude'][:])]
+            lon_r=[np.min(self.data.variables['longitude'][:]),
+                    np.max(self.data.variables['longitude'][:])]
+
+            print("querying kdtree on interpolated grid")
+            # only query points within true domain
+
+
+            i_query=0
+            for x_i in range(0,len(X)):
+                for y_i in range(0,len(Y)):
+                    for z_i in range(0,len(Z)):
+                        thispt=[X[x_i],Y[y_i],Z[z_i]]
+                        for fi in fields:
+                            (dists,indxs)=trees[fi]['tree'].query(thispt,k=8,distance_upper_bound=max_dist)
+                            indxs=indxs[~np.isinf(dists)]
+                            dists=dists[~np.isinf(dists)]
+
+                            if len(indxs)>1:
+                                print("hello")
+                                print(indxs)
+                                vals=trees[fi]['data'][indxs]
+
+                                # simple inverse distance weighting
+                                wts=1/dists
+                                wts=wts / wts.sum()
+                                self.interp['data'][fi][x_i,y_i,z_i]=np.dot(wts,vals)
+
+                                if i_query % 1000 ==0:
+                                    print([i_query,x_i,y_i,z_i,self.interp['data'][fi][x_i,y_i,z_i]])
+                                i_query+=1
+                            elif len(indxs)==1:
+                                print('len is 1')
+                                print(indxs)
+                                print(dists)
+                                vals=trees[fi]['data'][indxs[0]]
+                                print(vals)
+                                self.interp['data'][fi][x_i,y_i,z_i]=vals
+
+
+        # adjust final grid units
+        if input_units=='km':
+            self.interp['bbox']=self.interp['bbox']/1000.
+            for dim in ['x','y','z']:
+                self.interp['grid'][dim]=self.interp['grid'][dim]/1000.
+
+
+
         return
