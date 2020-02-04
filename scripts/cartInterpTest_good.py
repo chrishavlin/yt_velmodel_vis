@@ -2,14 +2,13 @@ import yt
 from yt_velmodel_vis import seis_model as sm
 import numpy as np
 import os
-# from mpl_toolkits.mplot3d import Axes3D
-# from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import matplotlib.pyplot as plt
 
 fname='NWUS11-S_percent.nc'
 out_dir='./output'
 model=sm.netcdf(fname)
 
+# interpolate the cartesian (or load it if it exists)
 dvs_n=os.path.join(out_dir,fname.split('.')[0]+'_dvs_interp.npy')
 if os.path.isfile(dvs_n):
     model.coordTransform('sphere2cart')
@@ -19,18 +18,19 @@ else:
     model.interp2cartesian(fields=['dvs'],res=[10000,10000,10000], input_units='m',max_dist=100000)
     dvs=model.interp['data']['dvs']
     np.save(dvs_n,dvs)
-
 data={}
 data['dvs']=dvs
+
+# set some gaussians for the TF
 bnds=[-6,10.]
 tf = yt.ColorTransferFunction((bnds[0],bnds[1]))
-# # [center location, peak width, (red, green, blue, alpha)]
+# [center location, peak width, (red, green, blue, alpha)]
 TF_gausians=[[-2,1,(1.,0.0,0.0,0.8)],
              [2,1,(0.,0.0,1.0,0.8)]]
 for gau in TF_gausians:
     tf.add_gaussian(gau[0],gau[1],gau[2])
 
-# plot the tf with a histogram
+# plot the TF with a histogram
 x = np.linspace(bnds[0],bnds[1],tf.nbins)
 y = tf.funcs[3].y
 w = np.append(x[1:]-x[:-1], x[-1]-x[-2])
@@ -43,8 +43,7 @@ ax.bar(x, tf.funcs[3].y, w, edgecolor=[0.0, 0.0, 0.0, 0.0],
        log=False, color=colors, bottom=[0])
 plt.savefig(os.path.join(out_dir,'cartInterpTest_tf.png'))
 
-
-#
+# load the data as a uniform grid, create the 3d scene
 sc_mult=1.0 # scale multiplier
 bbox = model.cart['bbox'] # list-like [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
 print(bbox)
@@ -56,7 +55,7 @@ sc = yt.create_scene(ds,'dvs')
 # Draw the domain boundary
 sc.annotate_domain(ds, color=[1, 1, 1, 0.001])
 
-# manually draw fixed radius lines
+# manually draw fixed radius lines (calculate x,y,z of true lat,lon,depth domain extents)
 lat_rnge=[np.min(model.data.variables['latitude']),np.max(model.data.variables['latitude'])]
 lon_rnge=[np.min(model.data.variables['longitude']),np.max(model.data.variables['longitude'])]
 # fixed radius, longitude vary latitude
@@ -93,18 +92,12 @@ for depth in [min_dep,max_dep]:
         lines=yt.visualization.volume_rendering.api.LineSource(pts,np.array(clrs))
         sc.add_source(lines)
 
-# fixed radius, vary latitude
+# some camera settings
 pos=sc.camera.position
-# pos[2]=np.mean(bbox[2])
-# pos[]
 sc.camera.set_position(pos,north_vector=np.array([0.0, 0.0, 1.0]))
-# cam.position = pos
-# cam.focus = np.array([np.mean(bbox[0]),np.mean(bbox[1]),np.mean(bbox[2])])
-# cam.north_vector = np.array([0.0, 0.0, 1.0])
-
-#
 source = sc.sources['source_00']
 source.tfh.set_log(False)
-# source.tfh.grey_opacity = False
-source.set_transfer_function(tf) # apply the transfer function!
+
+# apply the TF and render it
+source.set_transfer_function(tf)
 sc.save(os.path.join(out_dir,'cartInterpTest.png'),sigma_clip=2.)

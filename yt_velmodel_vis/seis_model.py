@@ -33,8 +33,8 @@ def cart2sphere(x,y,z,geo=True):
     R = np.sqrt(xy + z**2)
     lat = np.arctan2(np.sqrt(xy), z)*180./np.pi
     lon = np.arctan2(y, x)*180./np.pi
-    # if geo:
-    #     lat = lat - 90. # equator is at 0, +90 is N pole
+    if geo:
+        lat = lat - 90. # equator is at 0, +90 is N pole
 
     return (R,lat,lon)
 
@@ -445,8 +445,6 @@ class netcdf(object):
 
         # interpolate data fields onto the grid, ignore fill values
         if len(fields)>0:
-            print("interpolating to cartesian bounding box")
-
             # self.cart['X']={'X':X,'Y':Y,'Z':Z} The cartesian coords of data are here
             xdata=self.cart['X'].ravel()
             ydata=self.cart['Y'].ravel()
@@ -465,31 +463,13 @@ class netcdf(object):
                 xyz=np.column_stack((x_fi,y_fi,z_fi))
                 print("building kd tree for "+fi)
                 trees[fi]={'tree':spatial.cKDTree(xyz),'data':data}
-                print("  kd tree built")
+                print("    kd tree built")
 
                 # initialize interpolated field
                 self.interp['data'][fi]=np.nan*np.ones((dimInfo['X']['N'],dimInfo['Y']['N'],dimInfo['Z']['N']))
 
-            # fill the interpolated field
-            # X=np.linspace(dimInfo['X'][0],dimInfo['X'][1],dimInfo['X']['N'])
-            # Y=np.linspace(dimInfo['Y'][0],dimInfo['Y'][1],dimInfo['Y']['N'])
-            # Z=np.linspace(dimInfo['Z'][0],dimInfo['Z'][1],dimInfo['Z']['N'])
-
-            # assemble points to query
-            pts=[]
-            dep_r=[np.min(self.data.variables['depth'][:])*1000.,
-                    np.max(self.data.variables['depth'][:])*1000.]
-            lat_r=[np.min(self.data.variables['latitude'][:]),
-                    np.max(self.data.variables['latitude'][:])]
-            lon_r=[np.min(self.data.variables['longitude'][:]),
-                    np.max(self.data.variables['longitude'][:])]
-
-            print("querying kdtree on interpolated grid")
-            # only query points within true domain
-
-            # find points within the original domain
-            print("finding points within original domain")
-            Xg,Yg,Zg=np.meshgrid(X,Y,Z)
+            # build the cartesian grid
+            Xg,Yg,Zg=np.meshgrid(X,Y,Z,indexing='ij')
             orig_shape=Xg.shape
             Xg=Xg.ravel(order='C')
             Yg=Yg.ravel(order='C')
@@ -497,92 +477,40 @@ class netcdf(object):
             pts=np.column_stack((Xg,Yg,Zg))
             indxs=np.array(range(0,len(pts)))
 
-
+            print("querying kdtree on interpolated grid")
             for fi in fields:
                 print("    processing "+fi)
                 (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)
 
-
-                print(len(dists))
-                print(len(tree_indxs))
                 # remove points with all infs (no NN's within max_dist)
                 m=np.all(~np.isinf(dists),axis=1)
                 tree_indxs=tree_indxs[m]
                 indxs=indxs[m]
                 dists=dists[m]
-
+                print(len(dists))
+                print(len(tree_indxs))
                 print("removed points with all infs")
                 print(len(dists))
                 print(len(tree_indxs))
 
-
-                print("interpolating NN points to grid")
+                print("    applying IDW to move data to grid")
                 for gridpoint in range(0,len(tree_indxs)):
-
-                    # full_indx=full_indxs[gridpoint]
-
                     NN_indxs=tree_indxs[gridpoint]
                     NN_dists=dists[gridpoint]
                     NN_indxs=NN_indxs[~np.isinf(NN_dists)]
                     NN_dists=NN_dists[~np.isinf(NN_dists)]
-                    full_indx=np.unravel_index(indxs[gridpoint],orig_shape,order='C') # 3d indexes of interpolated data grid
-
-                    # print("evaluating new point")
-                    # print(pts[indxs[gridpoint]])
-                    # print(indxs[gridpoint])
-                    # print(gridpoint)
-                    # print(NN_dists)
-                    # print(full_indx)
+                    full_indx=np.unravel_index(indxs[gridpoint],orig_shape,order='C')
 
                     if len(NN_indxs)==1:
-                        # print('only 1')
-                        # print(full_indx)
-                        # print(trees[fi]['data'][NN_indxs])
                         self.interp['data'][fi][full_indx]=trees[fi]['data'][NN_indxs]
                     elif len(NN_indxs)>1:
-                        # print(full_indx)
                         vals=trees[fi]['data'][NN_indxs]
                         wts=1/NN_dists
                         wts=wts / wts.sum()
                         self.interp['data'][fi][full_indx]=np.dot(wts,vals)
-                        # print('wts + vals')
-                        # print(wts)
-                        # print(vals)
-                        # print('IDW result:')
-                        # print(np.dot(wts,vals))
 
             if store_trees:
                 self.interp['trees']=trees
-
-
-
-            # i_query=0
-            # for x_i in range(0,len(X)):
-            #     for y_i in range(0,len(Y)):
-            #         for z_i in range(0,len(Z)):
-            #             thispt=[X[x_i],Y[y_i],Z[z_i]]
-            #             for fi in fields:
-            #                 (dists,indxs)=trees[fi]['tree'].query(thispt,k=8,distance_upper_bound=max_dist)
-            #                 indxs=indxs[~np.isinf(dists)]
-            #                 dists=dists[~np.isinf(dists)]
-            #
-            #                 if len(indxs)>1:
-            #                     print("hello")
-            #                     print(indxs)
-            #                     vals=trees[fi]['data'][indxs]
-            #
-            #                     # simple inverse distance weighting
-            #                     wts=1/dists
-            #                     wts=wts / wts.sum()
-            #                     self.interp['data'][fi][x_i,y_i,z_i]=np.dot(wts,vals)
-            #
-            #                     if i_query % 1000 ==0:
-            #                         print([i_query,x_i,y_i,z_i,self.interp['data'][fi][x_i,y_i,z_i]])
-            #                     i_query+=1
-            #                 elif len(indxs)==1:
-            #                     vals=trees[fi]['data'][indxs[0]]
-            #                     self.interp['data'][fi][x_i,y_i,z_i]=vals
-
 
         # adjust final grid units
         if input_units=='km':
