@@ -38,7 +38,7 @@ colors = np.array([tf.funcs[0].y, tf.funcs[1].y, tf.funcs[2].y,
                    tf.funcs[3].y]).T
 fig = plt.figure(figsize=[6, 3])
 ax = fig.add_axes([0.2, 0.2, 0.75, 0.75])
-d_hist=ax.hist(data['dvs'].ravel(),bins=100,density=True,log=False)
+d_hist=ax.hist(data['dvs'][~np.isnan(dvs)].ravel(),bins=100,density=True,log=False)
 ax.bar(x, tf.funcs[3].y, w, edgecolor=[0.0, 0.0, 0.0, 0.0],
        log=False, color=colors, bottom=[0])
 plt.savefig(os.path.join(out_dir,'cartInterpTest_tf.png'))

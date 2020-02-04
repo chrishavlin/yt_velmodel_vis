@@ -107,3 +107,4 @@ venv.bak/
 scripts/output/*png
 
 *.png
+*.npy
