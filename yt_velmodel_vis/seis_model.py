@@ -487,11 +487,11 @@ class netcdf(object):
                 tree_indxs=tree_indxs[m]
                 indxs=indxs[m]
                 dists=dists[m]
-                print(len(dists))
-                print(len(tree_indxs))
-                print("removed points with all infs")
-                print(len(dists))
-                print(len(tree_indxs))
+                #print(len(dists))
+                #print(len(tree_indxs))
+                #print("removed points with all infs")
+                #print(len(dists))
+                #print(len(tree_indxs))
 
                 print("    applying IDW to move data to grid")
                 for gridpoint in range(0,len(tree_indxs)):
