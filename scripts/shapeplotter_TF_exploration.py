@@ -27,10 +27,13 @@ data['dvs']=dvs
 bnds=[-6,10.]
 tf = yt.ColorTransferFunction((bnds[0],bnds[1]))
 # [center location, peak width, (red, green, blue, alpha)]
-TF_gausians=[[-2,1,(1.,0.0,0.0,0.8)],
-             [2,1,(0.,0.0,1.0,0.8)]]
-for gau in TF_gausians:
-    tf.add_gaussian(gau[0],gau[1],gau[2])
+# TF_gausians=[[-2,1,(1.,0.0,0.0,.8)]]
+# for gau in TF_gausians:
+#     tf.add_gaussian(gau[0],gau[1],gau[2])
+tf.add_step(-3, -2, [1.0, 0., 0., 1.0])
+tf.add_step(-2, -1, [1.0, 0.5, 0., .8])
+# tf.add_step(-1.5, -0, [1.0, 1., 0., .1])
+
 
 # plot the TF with a histogram
 x = np.linspace(bnds[0],bnds[1],tf.nbins)
@@ -43,7 +46,7 @@ ax = fig.add_axes([0.2, 0.2, 0.75, 0.75])
 d_hist=ax.hist(data['dvs'][~np.isnan(dvs)].ravel(),bins=100,density=True,log=False)
 ax.bar(x, tf.funcs[3].y, w, edgecolor=[0.0, 0.0, 0.0, 0.0],
        log=False, color=colors, bottom=[0])
-plt.savefig(os.path.join(out_dir,'shapeplotter_tf.png'))
+plt.savefig(os.path.join(out_dir,'shapeplotter_TF_exploration_tf.png'))
 
 # load the data as a uniform grid, create the 3d scene
 sc_mult=1.0 # scale multiplier
@@ -85,10 +88,12 @@ source.tfh.set_log(False)
 
 
 res=sc.camera.get_resolution()
-res_factor=3
+res_factor=2
 new_res=(res[0]*res_factor,res[1]*res_factor)
 sc.camera.set_resolution(new_res)
 # apply the TF and render it
 source.set_transfer_function(tf)
-nm='shapeplotter.png'
-sc.save(os.path.join(out_dir,nm),sigma_clip=3)
+
+for sig_clip in [0.5,0.75,1.0,2.0,3.0]:
+    nm='shapeplotter_TF_exploration_'+str(sig_clip)+'.png'
+    sc.save(os.path.join(out_dir,nm),sigma_clip=sig_clip)
