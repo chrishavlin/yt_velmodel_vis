@@ -78,22 +78,46 @@ YS_lon=np.array([-110.584663])
 YS_rads=np.array([6371.*1e3])
 sc=sp.addShapeToScene(sc,YS_lat,YS_lon,YS_rads,'PointSource',[1.,1.,1.,0.005],6)
 
-
+# TRY PUTTING NORHT THROUGH CENTER OF DOMAIN!!!!!!!!!!!!!!!!!
+# bbox = model.cart['bbox'] # list-like [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
+Rmax=6371*1000.
+center_vec=np.array([np.mean(bbox[0])/Rmax,np.mean(bbox[1])/Rmax,np.mean(bbox[2])/Rmax])
+# center_vec=np.array([0.0, 0.0, 1.0])
 # some camera settings
 pos=sc.camera.position
 print(pos)
-sc.camera.set_position(pos,north_vector=np.array([0.0, 0.0, 1.0]))
+sc.camera.set_position(pos,north_vector=center_vec)
 source = sc.sources['source_00']
 source.tfh.set_log(False)
 
 
 res=sc.camera.get_resolution()
-res_factor=2
+res_factor=1
 new_res=(res[0]*res_factor,res[1]*res_factor)
 sc.camera.set_resolution(new_res)
 # apply the TF and render it
 source.set_transfer_function(tf)
 
-for sig_clip in [0.5,0.75,1.0,2.0,3.0]:
-    nm='shapeplotter_TF_exploration_'+str(sig_clip)+'.png'
-    sc.save(os.path.join(out_dir,nm),sigma_clip=sig_clip)
+step=1
+N_steps=int(180 / step)
+max_places=int(np.log10(N_steps))
+angle=0
+for i_rot in range(0,N_steps):
+    sc.camera.rotate(step*np.pi/180.)
+    frame_name=str(i_rot)
+    places=0
+    if i_rot > 0:
+        places=int(np.log10(i_rot))
+    places_to_add=max_places-places
+    for ip in range(0,places_to_add):
+        frame_name='0'+frame_name
+    nm='shapeplotter_rotation/frame_'+frame_name+'.png'
+    print("saving "+nm)
+    sc.save(os.path.join(out_dir,nm),sigma_clip=0.5)    
+
+# for sig_clip in [0.5,0.75,1.0,2.0,3.0]:
+#     nm='shapeplotter_TF_exploration_'+str(sig_clip)+'.png'
+#     sc.save(os.path.join(out_dir,nm),sigma_clip=sig_clip)
+
+# nm='shapeplotter_TF_exploration_new.png'
+# sc.save(os.path.join(out_dir,nm),sigma_clip=0.5)
