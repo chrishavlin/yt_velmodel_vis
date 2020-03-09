@@ -9,13 +9,40 @@ model_settings={
     'NWUS11-S_percent.nc': {
         'field':'dvs',
         'interp':{'max_dist':50000,'res':[10000,10000,10000]},
-        'view':{'rotate_0':0.,'north_vec':'center_vec'}
+        'view':{'rotate_0':0.,'north_vec':'center_vec'},
+        'tfs':[
+              {'tftype':'step','values':(-3, -2, [1.0, 0., 0., 1.0])},
+              {'tftype':'step','values':(-2, -1, [1.0, 0.5, 0., .8])}
+            ],
+        'tf_bounds':[-10.,10.]
         },
     'NA07_percent.nc' :{
         'field':'dvs',
         'interp':{'max_dist':50000,'res':[10000,10000,10000]},
         'view':{
-            'rotate_0':0.,'north_vec':'north_vec'}
+            'rotate_0':0.,'north_vec':'north_vec'},
+        'tfs':[
+              {'tftype':'step','values':(-5, -.5, [1.0, 0., 0., .5])},
+              {'tftype':'step','values':(0.0001, 0.5, [0.5, 1., .5, .6])},
+              {'tftype':'step','values':(0.5, 1, [0., 1., .5, .7])},
+              {'tftype':'step','values':(1., 1.5, [0., 0., .9, .8])}
+            ],
+        'tf_bounds':[-10.,10.],
+        'res_factor':2.,
+        'sigma_clip':2
+        },
+    'csem_northamerica_1200km.nc' :{
+        'field':'vsv',
+        'interp':{'max_dist':50000,'res':[10000,10000,10000]},
+        'view':{
+            'rotate_0':0.,'north_vec':'north_vec'},
+        'tfs':[
+              {'tftype':'step','values':(4.2, 4.8, [1.0, 0., 0., .9])},
+              {'tftype':'step','values':(5, 5.75, [1.0, 0.5, 0.0, .9])},
+              {'tftype':'step','values':(6, 6.75, [0.0, 0.5, 1.0, .9])}
+            ],
+        'tf_bounds':[2,10.],
+        'sigma_clip':2
         }
 }
 
@@ -54,27 +81,19 @@ else:
 # dvs[dvs<0]=0
 data={}
 data[datafld]=dvs
-
+# dvs[np.isnan(dvs)]=1.0
+# print(dvs.min())
 # set some gaussians for the TF
-bnds=[-10.,10.]
+bnds=settings.get('tf_bounds', [-5,5])
 tf = yt.ColorTransferFunction((bnds[0],bnds[1]))
 # [center location, peak width, (red, green, blue, alpha)]
-# TF_gausians=[[-2,1,(1.,0.0,0.0,.8)]]
-# for gau in TF_gausians:
-#     tf.add_gaussian(gau[0],gau[1],gau[2])
-tf.add_step(-5, -0.001, [1.0, 0., 0., .5])
-tf.add_step(0.0001, 0.5, [0.5, 1., .5, .6])
-tf.add_step(0.5, 1, [0., 1., .5, .7])
-tf.add_step(1., 1.5, [0., 0., .9, .8])
 
-# tf.add_step(-1,-0.0001, [1., 0.,0.,.3])
-# tf.add_step(1,2, [0., 1., 1., .8])
-# tf.add_step(2,4, [0., 0., 1., .9])
-# tf.add_step(-1.5, -0, [1.0, 1., 0., .1])
-# tf.add_gaussian(4,3,(1.,0,0,0.8))
-# tf.add_gaussian(-2,1,(1.,0,0,0.8))
-# tf.add_gaussian(2,1.5,(1.,0,0,0.8))
-
+for TFtoadd in settings['tfs']:
+    v=TFtoadd['values']
+    if TFtoadd['tftype']=='step':
+        tf.add_step(v[0],v[1],v[2])
+    elif TFtoadd['tftype']=='gaussian':
+        tf.add_gaussian(v[0],v[1],v[2])
 
 # plot the TF with a histogram
 x = np.linspace(bnds[0],bnds[1],tf.nbins)
@@ -84,7 +103,7 @@ colors = np.array([tf.funcs[0].y, tf.funcs[1].y, tf.funcs[2].y,
                    tf.funcs[3].y]).T
 fig = plt.figure(figsize=[6, 3])
 ax = fig.add_axes([0.2, 0.2, 0.75, 0.75])
-d_hist=ax.hist(data['dvs'][~np.isnan(dvs)].ravel(),bins=100,density=True,log=False)
+d_hist=ax.hist(data[datafld][~np.isnan(dvs)].ravel(),bins=100,density=True,log=False)
 ax.bar(x, tf.funcs[3].y, w, edgecolor=[0.0, 0.0, 0.0, 0.0],
        log=False, color=colors, bottom=[0])
 
@@ -140,8 +159,8 @@ source.tfh.set_log(False)
 
 
 res=sc.camera.get_resolution()
-res_factor=1
-new_res=(res[0]*res_factor,res[1]*res_factor)
+res_factor=settings.get('res_factor', 1)
+new_res=(int(res[0]*res_factor),int(res[1]*res_factor))
 sc.camera.set_resolution(new_res)
 # apply the TF and render it
 source.set_transfer_function(tf)
@@ -150,4 +169,5 @@ initRotation=settings['view']['rotate_0']*np.pi/180
 sc.camera.rotate(initRotation)
 
 nm='vol_render.png'
-sc.save(os.path.join(out_dir,nm),sigma_clip=0.5)
+# sc.save(os.path.join(out_dir,nm),sigma_clip=0.5)
+sc.save(os.path.join(out_dir,nm),sigma_clip=settings.get('sigma_clip', 2))
