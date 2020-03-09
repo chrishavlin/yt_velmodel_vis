@@ -13,7 +13,7 @@ model_settings={
         },
     'NA07_percent.nc' :{
         'field':'dvs',
-        'interp':{'max_dist':100000,'res':[50000,50000,50000]},
+        'interp':{'max_dist':50000,'res':[10000,10000,10000]},
         'view':{
             'rotate_0':0.,'north_vec':'north_vec'}
         }

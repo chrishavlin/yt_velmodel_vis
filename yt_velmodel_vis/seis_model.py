@@ -466,48 +466,60 @@ class netcdf(object):
                 print("    kd tree built")
 
                 # initialize interpolated field
-                self.interp['data'][fi]=np.nan*np.ones((dimInfo['X']['N'],dimInfo['Y']['N'],dimInfo['Z']['N']))
+                self.interp['data'][fi]=np.full((dimInfo['X']['N'],dimInfo['Y']['N'],dimInfo['Z']['N']),np.nan)
 
             # build the cartesian grid
-            Xg,Yg,Zg=np.meshgrid(X,Y,Z,indexing='ij')
-            orig_shape=Xg.shape
-            Xg=Xg.ravel(order='C')
-            Yg=Yg.ravel(order='C')
-            Zg=Zg.ravel(order='C')
-            pts=np.column_stack((Xg,Yg,Zg))
-            indxs=np.array(range(0,len(pts)))
-
+            print('building cartesian grid')
+            xdata,ydata,zdata=np.meshgrid(X,Y,Z,indexing='ij')
+            orig_shape=xdata.shape
+            xdata=xdata.ravel(order='C')
+            ydata=ydata.ravel(order='C')
+            zdata=zdata.ravel(order='C')
+            # pts=np.column_stack((xdata,ydata,zdata))
+            # indxs=np.array(range(0,len(xdata)))
+            N_grid=len(xdata)
             print("querying kdtree on interpolated grid")
-            for fi in fields:
-                print("    processing "+fi)
-                (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)
+            chunk=100000
+            N_chunks=int(N_grid/chunk)+1
+            print("breaking into "+str(N_chunks)+' chunks')
+            for i_chunk in range(0,N_chunks):
+                print("   processing chunk "+str(i_chunk)+" of "+str(N_chunks))
+                i_0=i_chunk*chunk
+                i_1=i_0+chunk
+                if i_1>N_grid:
+                    i_1=N_grid
+                pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))
+                indxs=np.array(range(i_0,i_1))
+                for fi in fields:
+                    # print("    processing "+fi)
+                    (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)
 
-                # remove points with all infs (no NN's within max_dist)
-                m=np.all(~np.isinf(dists),axis=1)
-                tree_indxs=tree_indxs[m]
-                indxs=indxs[m]
-                dists=dists[m]
-                #print(len(dists))
-                #print(len(tree_indxs))
-                #print("removed points with all infs")
-                #print(len(dists))
-                #print(len(tree_indxs))
+                    # remove points with all infs (no NN's within max_dist)
+                    m=np.all(~np.isinf(dists),axis=1)
+                    tree_indxs=tree_indxs[m]
+                    indxs=indxs[m]
+                    dists=dists[m]
+                    #print(len(dists))
+                    #print(len(tree_indxs))
+                    #print("removed points with all infs")
+                    #print(len(dists))
+                    #print(len(tree_indxs))
 
-                print("    applying IDW to move data to grid")
-                for gridpoint in range(0,len(tree_indxs)):
-                    NN_indxs=tree_indxs[gridpoint]
-                    NN_dists=dists[gridpoint]
-                    NN_indxs=NN_indxs[~np.isinf(NN_dists)]
-                    NN_dists=NN_dists[~np.isinf(NN_dists)]
-                    full_indx=np.unravel_index(indxs[gridpoint],orig_shape,order='C')
+                    # print("    applying IDW to move data to grid")
+                    for gridpoint in range(0,len(tree_indxs)):
+                        NN_indxs=tree_indxs[gridpoint]
+                        NN_dists=dists[gridpoint]
+                        NN_indxs=NN_indxs[~np.isinf(NN_dists)]
+                        NN_dists=NN_dists[~np.isinf(NN_dists)]
+                        full_indx=np.unravel_index(indxs[gridpoint],orig_shape,order='C')
 
-                    if len(NN_indxs)==1:
-                        self.interp['data'][fi][full_indx]=trees[fi]['data'][NN_indxs]
-                    elif len(NN_indxs)>1:
-                        vals=trees[fi]['data'][NN_indxs]
-                        wts=1/NN_dists
-                        wts=wts / wts.sum()
-                        self.interp['data'][fi][full_indx]=np.dot(wts,vals)
+                        if len(NN_indxs)==1:
+                            self.interp['data'][fi][full_indx]=trees[fi]['data'][NN_indxs]
+                        elif len(NN_indxs)>1:
+                            vals=trees[fi]['data'][NN_indxs]
+                            wts=1/NN_dists
+                            wts=wts / wts.sum()
+                            self.interp['data'][fi][full_indx]=np.dot(wts,vals)
 
             if store_trees:
                 self.interp['trees']=trees
