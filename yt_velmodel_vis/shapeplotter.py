@@ -7,16 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import yt
-
-class shapedata(object):
-    '''
-    shapefile support
-    '''
-    def __init__(self,filename):
-        ncdf=sm.netcdf(filename,load_ds=False) # use for file path validation
-        self.file=ncdf.validateFile()
-
-        return
+import os
+import geopandas as gpd # pyshp
 
 class shapeTrace(object):
     '''
@@ -298,31 +290,6 @@ class sphericalChunk(object):
         if radius is None:
             radius = max(self.radius_range)
 
-        # # north/south pole
-        # rads=np.linspace(0,radius*1.5,10)
-        # lons=np.full(rads.shape,0.)
-        # lats=np.full(rads.shape,89.9999)
-        # sc=addShapeToScene(sc,lats,lons,rads,RGBa=RGBa)
-        # lats=np.full(rads.shape,-90.)
-        # sc=addShapeToScene(sc,lats,lons,rads,RGBa=RGBa)
-        #
-        # # equator
-        # lons=np.linspace(0,360,100)
-        # lats=np.full(lons.shape,0.)
-        # sc=addShapeToScene(sc,lats,lons,radius,RGBa=RGBa)
-
-        # continuation of lat/lon domain extents
-        # lon_pts=np.linspace(5,355.,100)
-        # for this_rad in self.radius_range:
-        #     for lat in self.lat_range:
-        #         lats=np.full(lon_pts.shape,lat)
-        #         sc=addShapeToScene(sc,lats,lon_pts,this_rad,RGBa=RGBa)
-        #
-        #     lat_pts=np.linspace(-89.999,89.999,100)
-        #     for lon in self.lon_range:
-        #         lons=np.full(lat_pts.shape,lon)
-        #         sc=addShapeToScene(sc,lat_pts,lons,this_rad,RGBa=RGBa)
-
         # radius lines from 0 to radius
         rads=np.linspace(0,radius,10)
         rshp=rads.shape
@@ -333,5 +300,191 @@ class sphericalChunk(object):
                 sc=addShapeToScene(sc,lats,lons,rads,RGBa=RGBa)
 
 
+
+        return sc
+
+class shapedata(object):
+    '''
+    parses shapefiles using geopandas to construct yt line and point sources
+    from points, lines and polygons in shapefiles.
+
+    shp=shapedata(filename,buildTraces=True,bbox=None)
+
+    Parameters
+    ----------
+    filename    the full path filename of the shapefile
+    buildTraces if True, will build the traces on instantiating class
+    bbox        bounding box to use when reading in shapefile, four element list
+                [lon_min,lat_min,lon_max,lat_max]
+
+    '''
+    def __init__(self,filename,buildTraces=True,bbox=None,radius=6371.):
+
+        if os.path.isfile(filename):
+            self.filename=filename
+        else:
+            raise ValueError(filename + ' does not exist.')
+
+        self.radius=radius
+        self.Traces=[]
+        if buildTraces:
+            self.Traces=self.buildTraces(bbox=bbox)
+
+        return
+
+    def buildTraces(self,traces=[],bbox=None,sc=None,include_points=True,
+                    include_lines=True,include_polygons=True,
+                    RGBa=[1.,1.,1.,0.05],pt_size=3):
+        '''
+        loads a shapefile and builds the yt traces.
+
+        shapedata.buildTraces(traces=[],bbox=None,sc=None,include_points=True,
+                              include_lines=True,include_polygons=True,
+                              RGBa=[1.,1.,1.,0.05],pt_size=3):
+
+        Parameters
+        ----------
+        traces            list of yt point or line sources
+        bbox              bounding box for shapefile read
+        sc                the yt scence to add traces to
+        include_points    boolean, include point data from shapefile?
+        include_lines     boolean, include line data from shapefile?
+        include_polygons  boolean, include polygon data from shapefile?
+        RGBa              RGBa list or tuple for yt
+        pt_size           pixel size for point data
+
+        Output
+        ------
+        if sc is provided, will return:
+
+        sc      the modified yt scene, if
+
+        otherwise, returns
+
+        traces  list of yt line and point sources
+
+
+        kwargs passed to shapeTrace.buildYtSource
+        '''
+
+        R0=self.radius
+        def traversePoints(df,traces=[]):
+            '''
+            traverses shapefile points, appends to traces
+            '''
+            print("traversing point data")
+            # handle Points
+            pt_df=df[df.geometry.type=='Point']['geometry']
+            if len(pt_df)>0:
+                print(len(pt_df))
+                pts=shapeTrace(pt_df.y.to_numpy(),pt_df.x.to_numpy(),R0)
+                print('appending with point size '+str(pt_size)+' and RGBa')
+                print(RGBa)
+                traces.append(pts.buildYtSource('PointSource',RGBa,pt_size))
+
+            # handle MultiPoints
+            print("traversing multipoint")
+            pt_df=df[df.geometry.type=='MultiPoint'].geometry.tolist()
+            lons=[]
+            lats=[]
+            for multipt in pt_df:
+                for pt in multipt:
+                    lons.append(pt.x)
+                    lats.append(pt.y)
+            print('assembled lat lons for multipoint')
+            print(len(lons))
+            print(len(lats))
+            if len(lons)>0 and len(lats)>0:
+                pts=shapeTrace(lats,lons,R0)
+                traces.append(pts.buildYtSource('PointSource',RGBa,pt_size))
+            return traces
+
+        def traverseLines(df,traces=[]):
+            '''
+            traverses shapefile lines, appends line segments to traces
+            '''
+            # Lines
+            pt_df=df[df.geometry.type=='Line'].geometry.tolist()
+            for ln in pt_df:
+                pts=shapeTrace(np.array(ln.xy[1]),np.array(ln.xy[0]),R0)
+                traces.append(pts.buildYtSource('LineSource',RGBa))
+
+            # MultiLines
+            pt_df=df[df.geometry.type=='MultiLine'].geometry.tolist()
+            for lns in pt_df:
+                for ln in lns:
+                    pts=shapeTrace(np.array(ln.xy[1]),np.array(ln.xy[0]),R0)
+                    traces.append(pts.buildYtSource('LineSource',RGBa))
+            return traces
+
+        def traversePoly(poly,traces=[]):
+            '''
+            appends traces for each line segment in a polygon
+            '''
+            if poly.boundary.type=='LineString':
+                pts=shapeTrace(np.array(poly.boundary.xy[1]),np.array(poly.boundary.xy[0]),R0)
+                traces.append(pts.buildYtSource('LineSource',RGBa))
+            else:
+                for ln in poly.boundary:
+                    pts=shapeTrace(np.array(ln.xy[1]),np.array(ln.xy[0]),R0)
+                    traces.append(pts.buildYtSource('LineSource',RGBa))
+            return traces
+
+        def traversePolygons(df,traces=[]):
+            '''
+            traverses shapefile polygons, appends line segments to traces
+            '''
+            # Polygons
+            pt_df=df[df.geometry.type=='Polygon'].geometry.tolist()
+            print("traversing "+str(len(pt_df))+' polygons')
+            for poly in pt_df:
+                traces=traversePoly(poly,traces)
+
+            # Multi-Polygons
+            pt_df=df[df.geometry.type=='MultiPolygon'].geometry.tolist()
+            print("traversing "+str(len(pt_df))+' multi polygons')
+            for multipoly in pt_df:
+                for poly in multipoly:
+                    traces=traversePoly(poly,traces)
+            return traces
+
+
+
+        df=gpd.read_file(self.filename,bbox=bbox)
+        if include_points:
+            traces=traversePoints(df,traces)
+        if include_lines:
+            traces=traverseLines(df,traces)
+        if include_polygons:
+            traces=traversePolygons(df,traces)
+
+        if sc is not None:
+            return self.addToScene(sc,traces)
+        else:
+            return traces
+
+
+    def addToScene(self,sc,traces=[]):
+        '''
+
+        shapedata.addToScene(sc,traces)
+
+        adds the yt line and point sources to the yt scene
+
+        Parameters
+        ----------
+        sc      the yt scene to modify
+        traces  list of yt line and point sources
+
+        Output
+        ------
+        sc      the modified yt scene
+        '''
+
+        if len(traces)==0:
+            traces=self.Traces
+
+        for Trc in traces:
+            sc.add_source(Trc)
 
         return sc
