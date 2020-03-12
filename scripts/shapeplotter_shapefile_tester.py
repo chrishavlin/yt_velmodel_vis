@@ -71,14 +71,15 @@ sc=sp.addShapeToScene(sc,YS_lat,YS_lon,YS_rads,'PointSource',[1.,.9,.9,0.005],6)
 
 
 ## add data from a shapefile
+print('adding volcanic fields')
 fullfi=db.validateFile('GLB_VOLC.shp')
 shp_bbox=[lon_rnge[0],lat_rnge[0],lon_rnge[1],lat_rnge[1]]
-volcs=sp.shapedata(fullfi,bbox=shp_bbox,radius=R*1000.)
-sc=volcs.addToScene(sc)
+volcs=sp.shapedata(fullfi,radius=R*1000.,buildTraces=False)
+sc=volcs.buildTraces(RGBa=[0.,0.8,0.,0.05],bbox=shp_bbox,sc=sc)
 
-
-world_file = gpd.datasets.get_path('naturalearth_lowres')
-continents=sp.shapedata(world_file,bbox=shp_bbox,radius=R*1000.)
+print("adding state bounds")
+us_states=db.validateFile('cb_2018_us_state_20m.shp')
+continents=sp.shapedata(us_states,bbox=shp_bbox,radius=R*1000.)
 sc=continents.addToScene(sc)
 
 

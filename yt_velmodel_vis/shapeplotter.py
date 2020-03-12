@@ -328,6 +328,7 @@ class shapedata(object):
         self.radius=radius
         self.Traces=[]
         if buildTraces:
+            print("building traces")
             self.Traces=self.buildTraces(bbox=bbox)
 
         return
@@ -372,18 +373,18 @@ class shapedata(object):
             '''
             traverses shapefile points, appends to traces
             '''
-            print("traversing point data")
+            # print("traversing point data")
             # handle Points
             pt_df=df[df.geometry.type=='Point']['geometry']
             if len(pt_df)>0:
-                print(len(pt_df))
+                # print(len(pt_df))
                 pts=shapeTrace(pt_df.y.to_numpy(),pt_df.x.to_numpy(),R0)
-                print('appending with point size '+str(pt_size)+' and RGBa')
-                print(RGBa)
+                # print('appending with point size '+str(pt_size)+' and RGBa')
+                # print(RGBa)
                 traces.append(pts.buildYtSource('PointSource',RGBa,pt_size))
 
             # handle MultiPoints
-            print("traversing multipoint")
+            # print("traversing multipoint")
             pt_df=df[df.geometry.type=='MultiPoint'].geometry.tolist()
             lons=[]
             lats=[]
@@ -391,9 +392,9 @@ class shapedata(object):
                 for pt in multipt:
                     lons.append(pt.x)
                     lats.append(pt.y)
-            print('assembled lat lons for multipoint')
-            print(len(lons))
-            print(len(lats))
+            # print('assembled lat lons for multipoint')
+            # print(len(lons))
+            # print(len(lats))
             if len(lons)>0 and len(lats)>0:
                 pts=shapeTrace(lats,lons,R0)
                 traces.append(pts.buildYtSource('PointSource',RGBa,pt_size))
@@ -421,11 +422,16 @@ class shapedata(object):
             '''
             appends traces for each line segment in a polygon
             '''
+            # print("    traversing single polygon")
             if poly.boundary.type=='LineString':
+                # print('     points in this polygon boundary:')
+                # print(len(poly.boundary.xy[1]))
                 pts=shapeTrace(np.array(poly.boundary.xy[1]),np.array(poly.boundary.xy[0]),R0)
                 traces.append(pts.buildYtSource('LineSource',RGBa))
             else:
+                # print("    looping over multiline")
                 for ln in poly.boundary:
+                    # print(len(ln.xy[1]))
                     pts=shapeTrace(np.array(ln.xy[1]),np.array(ln.xy[0]),R0)
                     traces.append(pts.buildYtSource('LineSource',RGBa))
             return traces
@@ -436,19 +442,17 @@ class shapedata(object):
             '''
             # Polygons
             pt_df=df[df.geometry.type=='Polygon'].geometry.tolist()
-            print("traversing "+str(len(pt_df))+' polygons')
+            # print("traversing "+str(len(pt_df))+' polygons')
             for poly in pt_df:
                 traces=traversePoly(poly,traces)
 
             # Multi-Polygons
             pt_df=df[df.geometry.type=='MultiPolygon'].geometry.tolist()
-            print("traversing "+str(len(pt_df))+' multi polygons')
+            # print("traversing "+str(len(pt_df))+' multi polygons')
             for multipoly in pt_df:
                 for poly in multipoly:
                     traces=traversePoly(poly,traces)
             return traces
-
-
 
         df=gpd.read_file(self.filename,bbox=bbox)
         if include_points:
