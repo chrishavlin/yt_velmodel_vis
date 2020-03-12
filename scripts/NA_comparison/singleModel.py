@@ -4,6 +4,7 @@ from yt_velmodel_vis import shapeplotter as sp
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+from yt_velmodel_vis import datamanager as dm
 
 model_settings={
     'NWUS11-S_percent.nc': {
@@ -59,7 +60,8 @@ model_settings={
 fname='NA07_percent.nc'
 out_dir='./output/'+fname.split('.')[0] # for figures
 derived_data_dir='./data' # for derived data (interpolations )
-model=sm.netcdf(fname)
+db=dm.filesysDB()
+model=sm.netcdf(db.validateFile(fname))
 
 shortname=fname.split('.')[0]
 settings=model_settings[fname]
@@ -140,6 +142,17 @@ YS_lat=np.array([44.429764])
 YS_lon=np.array([-110.584663])
 YS_rads=np.array([6371.*1e3])
 sc=sp.addShapeToScene(sc,YS_lat,YS_lon,YS_rads,'PointSource',[1.,1.,1.,0.005],6)
+
+print('adding volcanic fields')
+fullfi=db.validateFile('GLB_VOLC.shp')
+shp_bbox=[lon_rnge[0],lat_rnge[0],lon_rnge[1],lat_rnge[1]]
+volcs=sp.shapedata(fullfi,radius=R*1000.,buildTraces=False)
+sc=volcs.buildTraces(RGBa=[0.,0.8,0.,0.05],bbox=shp_bbox,sc=sc)
+
+print("adding state bounds")
+us_states=db.validateFile('cb_2018_us_state_20m.shp')
+continents=sp.shapedata(us_states,bbox=shp_bbox,radius=R*1000.)
+sc=continents.addToScene(sc)
 
 # set north through domain center
 # bbox = model.cart['bbox'] # list-like [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
