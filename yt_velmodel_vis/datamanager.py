@@ -13,7 +13,7 @@ class filesysDB(object):
             top_level_dir = os.environ.get('YTVELMODELDIR')
 
         if top_level_dir is None:
-            raise(("Could not intialize filesysDB: top_level_dir is None and "
+            raise ValueError(("Could not intialize filesysDB: top_level_dir is None and "
                    "environment variable YTVELMODELDIR is not set."))
 
         self.db_path=top_level_dir
