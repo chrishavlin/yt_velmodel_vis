@@ -1,5 +1,6 @@
 import yt
 from yt_velmodel_vis import seis_model as sm
+from yt_velmodel_vis import datamanager as dm
 from yt_velmodel_vis import shapeplotter as sp
 import numpy as np
 import os
@@ -8,7 +9,10 @@ import geopandas as gpd
 
 fname='NWUS11-S_percent.nc'
 out_dir='./output'
-model=sm.netcdf(fname)
+
+db=dm.filesysDB()
+fullfi=db.validateFile(fname)
+model=sm.netcdf(fullfi)
 
 # interpolate the cartesian (or load it if it exists)
 mx=50000
@@ -67,8 +71,9 @@ sc=sp.addShapeToScene(sc,YS_lat,YS_lon,YS_rads,'PointSource',[1.,.9,.9,0.005],6)
 
 
 ## add data from a shapefile
+fullfi=db.validateFile('GLB_VOLC.shp')
 shp_bbox=[lon_rnge[0],lat_rnge[0],lon_rnge[1],lat_rnge[1]]
-volcs=sp.shapedata('GLB_VOLC.shp',bbox=shp_bbox,radius=R*1000.)
+volcs=sp.shapedata(fullfi,bbox=shp_bbox,radius=R*1000.)
 sc=volcs.addToScene(sc)
 
 
