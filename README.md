@@ -1,11 +1,21 @@
 # yt_velmodel_vis
 yt visualizations of seismic velocity models
 
+# dependencies:
+the yt package (https://yt-project.org) is required.
 
-# install
-1. install yt
-2. install netcdf4
-3. use pip to install this package:
+`geopandas` is also required. It has a number of dependencies itself including `pandas` and `shapely`, so easiest
+to install with pip or conda.
+
+* For conda: `conda install geopandas`
+* For pip: `pip install geopandas`
+
+# setting up yt_velmodel_vis
+
+
+## 1. package installation
+
+After you have the above dependencies installed, you can install this package using pip:
 
 #### general system install
 installs in default pip location, may require sudo if installing system-wide
@@ -28,10 +38,19 @@ pip install -e .
 ```
 to install within a conda environment, activate the environment first.
 
-# environment variables
-There are a few environment variables that can be useful:
+## 2. example data and environment variables
 
-`YTVELMODELDIR` : top level velocity model directory. yt_velmodel_vis classes will recursively search this dir for model files. If not using this environment variable, simply provide the full file path when loading velocity models. In bash:
+To run the example scripts here, you need to build a local filesystem database and fetch data from IRIS. This can be done by running the following script:
+
+```
+python scripts/dataSetup.py -top_dir /path/to/your/dir
+```
+
+You can then set the following environment variable:
+
+`YTVELMODELDIR`
+
+`yt_velmodel_vis` classes will recursively search this dir for model files. TO add an environment variable on a unix system using a bash shell, add the following to the `.bashrc` or `.bash_aliases` file:
 ```
 export YTVELMODELDIR=/path/to/yt_data/velocity_models
 ```
