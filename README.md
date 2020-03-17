@@ -12,48 +12,45 @@ to install with pip or conda.
 
 # setting up yt_velmodel_vis
 
+After you have the above dependencies installed, you can install this package in two steps:
+1. setting environment variables
+2. package installation with `pip`
 
-## 1. package installation
+## 1. setting environment variables
 
-After you have the above dependencies installed, you can install this package using pip:
+The example scripts and some `yt_velmodel_vis` classes require datafiles to be stored in a local filesystem database (cache). The location of this database is controlled by the directory stored in the environment variable `YTVELMODELDIR`.
 
-#### general system install
-installs in default pip location, may require sudo if installing system-wide
+So before installing, it is useful to set this environment variable to a directory where you'd like to install the local filesystem database. It can be an existing or new directory: new data files will be added as subdirectories within. `yt_velmodel_vis` classes will recursively search this directory for model files.
+
+To add an environment variable on a unix system using a bash shell, add the following to the `.bashrc` or `.bash_aliases` file:
+
+```
+export YTVELMODELDIR=/path/to/yt_data/velocity_models
+```
+
+## 2. package installation
+
+Navigate to the top level of the repository and then use `pip` to install.
+
+To install in the default pip location:
 ```
 pip install .
 ```
-to install within a conda environment, activate the environment first.
 
-#### user-specific install
-installs the package in current user's home
+To install within a conda environment, activate the environment first. If you are installing system wide, you will likely need `sudo` here.
+
+To install the package in current user's home:
 ```
 pip install -u .
 ```
 
-#### in debug mode
-to install in debug mode (changes to source code will update), while in top directory of repo:
+Or to install in debug mode (changes to source code will update), while in top directory of repo:
 
 ```
 pip install -e .
 ```
-to install within a conda environment, activate the environment first.
 
-## 2. example data and environment variables
-
-To run the example scripts here, you need to build a local filesystem database and fetch data from IRIS. This can be done by running the following script:
-
-```
-python scripts/dataSetup.py -top_dir /path/to/your/dir
-```
-
-You can then set the following environment variable:
-
-`YTVELMODELDIR`
-
-`yt_velmodel_vis` classes will recursively search this dir for model files. TO add an environment variable on a unix system using a bash shell, add the following to the `.bashrc` or `.bash_aliases` file:
-```
-export YTVELMODELDIR=/path/to/yt_data/velocity_models
-```
+If using conda, remember to activate the appropriate environment first.
 
 # Directory Structure
 `yt_velmodel_vis` : primary package directory.

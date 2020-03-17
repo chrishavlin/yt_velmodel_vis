@@ -5,6 +5,8 @@ except ImportError:
     import urllib as urlrequest
 import time
 import pandas as pd
+from yt_velmodel_vis import datafiles
+from distutils.dir_util import copy_tree
 
 class filesysDB(object):
     def __init__(self,top_level_dir=None):
@@ -46,12 +48,22 @@ class filesysDB(object):
         return validFile
 
 class initializeDB(filesysDB):
-
+    """ initializes the filestyem database (cache)"""
     def __init__(self,**kwargs):
-
+        lb=os.linesep
+        print(lb+"Initializing filesystem data cache...")
+        # find the top level directory to initialize at
         top_level_dir=kwargs.get('top_level_dir',None)
         if top_level_dir is None:
             top_level_dir = os.environ.get('YTVELMODELDIR')
+
+        if top_level_dir is None:
+            pathmsg=("YTVELMODELDIR environment variable is not set, please "
+                "enter a path to install the filesystem cache (or hit enter"
+                " to use default): ")
+            top_level_dir=input(pathmsg)
+            if len(top_level_dir)==0:
+                top_level_dir=os.path.join(os.path.expanduser("~"),'.ytvelmodeldata')
 
         if top_level_dir is not None and os.path.isdir(top_level_dir) is False:
             try:
@@ -61,19 +73,21 @@ class initializeDB(filesysDB):
 
         filesysDB.__init__(self,top_level_dir)
 
-        self.buildDb()
+        self.buildDb() # builds the initial directory framework
         self.IRIS_pause_s=3
-        self.fetchIRIS()
+        self.fetchIRIS() # fetches iris data (will not re-copy)
+        self.cpShp() # copies shapefile data
 
-        # if os.environ.get('YTVELMODELDIR') is None:
-        lb=os.linesep
-        print((lb+'Initialization complete, please set the environment variable '
-               'YTVELMODELDIR to '+self.db_path+' . For unix systems with bash,'
-               ' add the following to your .bashrc or .bash_aliases file:'
-               +lb+lb+'    export YTVELMODELDIR='+self.db_path+lb
-               ))
+        print(lb+'Filesystem database initialization complete.')
+        if os.environ.get('YTVELMODELDIR') is None:
+            print(('Please set the environment variable YTVELMODELDIR'
+                   ' to '+self.db_path+' . For unix systems with bash,'
+                   ' add the following to your .bashrc or .bash_aliases file:'
+                   +lb+lb+'    export YTVELMODELDIR='+self.db_path+lb
+                   ))
 
     def buildDb(self):
+        """ builds the top level subdirectories """
         # build the subdirectories
         print(os.linesep+"Building directory structure at "+self.db_path)
         for db_dir in ['IRIS_models','shapedata','IRIS_refModels']:
@@ -89,11 +103,30 @@ class initializeDB(filesysDB):
                     raise ValueError(msg)
 
     def fetchIRIS(self):
+        ''' fetches a number of models from IRIS '''
 
         # IRIS earth models
         url_base='https://ds.iris.edu/files/products/emc/emc-files/'
         models_to_fetch=['NA07_percent.nc','NWUS11-S_percent.nc',
             'DNA10-S_percent.nc','US.2016.nc']
+
+        # IRIS reference models
+        # reference models are csv files with no header. Following dictionaries
+        # set the columns for each reference model and include multiplication
+        # factors to normalize units between models.
+        Rmodels={
+            'AK135F/AK135F_AVG.csv':
+                {'cols':['depth_km','rho_kgm3','Vp_kms','Vs_kms','Qkappa','Qmu'],
+                 'factors':[1.,1000.,1.,1.,1.,1.]},
+            'PREM500/PREM500.csv':{
+                 'cols':['radius_km','rho_kgm3','Vpv_kms','Vsv_kms','Qkappa','Qmu',
+                                   'Vph_kms','Vsh_kms','eta'],
+                 'factors':[0.001,1.,0.001,0.001,1.,1.,0.001,0.001,1.]
+                                   }
+                }
+        url_base_R='http://ds.iris.edu/files/products/emc/data/'
+
+        # fetch the earth models
         print(os.linesep+"Fetching models from IRIS")
         for model in models_to_fetch:
             print("    fetching "+model+" from IRIS...")
@@ -109,21 +142,10 @@ class initializeDB(filesysDB):
             else:
                 print('    '+model+' already downloaded.')
 
-        # IRIS reference models
-        models={
-            'AK135F/AK135F_AVG.csv':
-                {'cols':['depth_km','rho_kgm3','Vp_kms','Vs_kms','Qkappa','Qmu'],
-                 'factors':[1.,1000.,1.,1.,1.,1.]},
-            'PREM500/PREM500.csv':{
-                 'cols':['radius_km','rho_kgm3','Vpv_kms','Vsv_kms','Qkappa','Qmu',
-                                   'Vph_kms','Vsh_kms','eta'],
-                 'factors':[0.001,1.,0.001,0.001,1.,1.,0.001,0.001,1.]
-                                   }
-                }
-        url_base='http://ds.iris.edu/files/products/emc/data/'
 
-        for model in models.keys():
-            full_url=url_base+model
+        # fetch and normalize the reference models
+        for model in Rmodels.keys():
+            full_url=url_base_R+model
             print("    fetching "+model+" from IRIS...")
             model_short=model.split('/')[-1]
             local_path=os.path.join(self.db_path,'IRIS_refModels',model_short)
@@ -134,17 +156,31 @@ class initializeDB(filesysDB):
                     msg=('    Could not fetch '+full_url)
                     print(msg)
 
-                df=pd.read_csv(local_path,header=None,names=models[model]['cols'])
+                df=pd.read_csv(local_path,header=None,names=Rmodels[model]['cols'])
 
-                colfact=dict(zip(models[model]['cols'],models[model]['factors']))
-                for col in models[model]['cols']:
+                colfact=dict(zip(Rmodels[model]['cols'],Rmodels[model]['factors']))
+                for col in Rmodels[model]['cols']:
                     df[col]=df[col]*colfact[col]
 
-                if 'depth_km' not in models[model]['cols'] and 'radius_km' in models[model]['cols']:
+                if 'depth_km' not in Rmodels[model]['cols'] and 'radius_km' in Rmodels[model]['cols']:
                     df['depth_km']=6371.-df['radius_km']
 
                 df.to_csv(local_path,index=False)
                 time.sleep(self.IRIS_pause_s)
             else:
                 print('    '+model+' already downloaded.')
+        return
+
+    def cpShp(self):
+        ''' copies shapefile data from package to local db cache '''
+        dataDir=datafiles.__path__._path[0]
+        shapeDest=os.path.join(self.db_path,'shapedata')
+        print(os.linesep+'Copying packaged shapefile data')
+        for shpDir in os.listdir(dataDir):
+            fullSrc=os.path.join(dataDir,shpDir)
+            fullDest=os.path.join(shapeDest,shpDir)
+            if os.path.isdir(fullSrc):
+                print('    copying '+shpDir)
+                copy_tree(fullSrc,fullDest,verbose=0)
+
         return
