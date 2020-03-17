@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import yt
 import os
-import geopandas as gpd # pyshp
+import geopandas as gpd
+from . import datamanager as dm
 
 class shapeTrace(object):
     '''
@@ -303,6 +304,52 @@ class sphericalChunk(object):
 
         return sc
 
+def availableShapeFiles():
+    ''' returns a dictionary of available shapefiles '''
+
+    # those included in package [filename,short name, category, description,source]
+
+    keynames=['file','short_name','category','description','source']
+    included=[
+        ['cb_2018_us_state_20m.shp','us_states','political_boundaries',
+         'US state boundaries, 20m resolution','https://census.gov'],
+        ['GLB_VOLC.shp','global_volcanos','tectonic',
+         'global volcanic fields with eruptions in last 10k years',
+         'https://earthworks.stanford.edu/catalog/harvard-glb-volc'],
+        ['ridge.shp','ridge','tectonic',
+         'divergent plate boundaries',
+         'http://www-udc.ig.utexas.edu/external/plates/data.htm'],
+        ['transform.shp','transform','tectonic',
+         'transform plate boundaries',
+         'http://www-udc.ig.utexas.edu/external/plates/data.htm'],
+        ['trench.shp','trench','tectonic',
+         'convergent plate boundaries',
+         'http://www-udc.ig.utexas.edu/external/plates/data.htm']
+    ]
+
+    db=dm.filesysDB()
+
+    shapeDict={'available':[],'details':{}}
+    fullfiles=[]
+    for shp in included:
+        if db.validateFile(shp[0]):
+            new_row=dict(zip(keynames,shp))
+            shapeDict['available'].append(shp[1])
+            shapeDict['details'][shp[1]]=new_row
+            fullfiles.append(shp[0].split('.')[0])
+
+    # look for other shapefiles in db
+    for fi in db.FilesByDir['shapedata']:
+        shrtnm=fi.split('.')[0]
+        file_ext=fi.split('.')[-1]
+        if shrtnm not in fullfiles and file_ext in ['shp']:
+            fullfiles.append(fi)
+            this_fi=[fi,shrtnm,'','','']
+            shapeDict['available'].append(shrtnm)
+            shapeDict['details'][shrtnm]=dict(zip(keynames,this_fi))
+
+    return shapeDict
+
 class shapedata(object):
     '''
     parses shapefiles using geopandas to construct yt line and point sources
@@ -312,7 +359,8 @@ class shapedata(object):
 
     Parameters
     ----------
-    filename    the full path filename of the shapefile
+    filename    the full path filename of the shapefile OR the short_name from
+                availableShapeFiles()
     buildTraces if True, will build the traces on instantiating class
     bbox        bounding box to use when reading in shapefile, four element list
                 [lon_min,lat_min,lon_max,lat_max]
@@ -320,15 +368,25 @@ class shapedata(object):
     '''
     def __init__(self,filename,buildTraces=True,bbox=None,radius=6371.):
 
+        self.db=dm.filesysDB()
         if os.path.isfile(filename):
             self.filename=filename
         else:
-            raise ValueError(filename + ' does not exist.')
+            shpDict=availableShapeFiles()
+            if filename in shpDict['available']:
+                # given filename is a short name
+                filename=shpDict['details'][filename]['file'] # now file name
+                filename=self.db.validateFile(filename) # now full path
+                if filename is False:
+                    raise ValueError(filename + ' does not exist.')
+                else:
+                    self.filename=filename
+            else:
+                raise ValueError(filename + ' does not exist.')
 
         self.radius=radius
         self.Traces=[]
         if buildTraces:
-            print("building traces")
             self.Traces=self.buildTraces(bbox=bbox)
 
         return
@@ -405,7 +463,7 @@ class shapedata(object):
             traverses shapefile lines, appends line segments to traces
             '''
             # Lines
-            pt_df=df[df.geometry.type=='Line'].geometry.tolist()
+            pt_df=df[df.geometry.type=='LineString'].geometry.tolist()
             for ln in pt_df:
                 pts=shapeTrace(np.array(ln.xy[1]),np.array(ln.xy[0]),R0)
                 traces.append(pts.buildYtSource('LineSource',RGBa))

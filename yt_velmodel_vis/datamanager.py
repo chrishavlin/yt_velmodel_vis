@@ -8,6 +8,9 @@ import pandas as pd
 from yt_velmodel_vis import datafiles
 from distutils.dir_util import copy_tree
 
+global default_db_path
+default_db_path=os.path.join(os.path.expanduser("~"),'.ytvelmodeldata')
+
 class filesysDB(object):
     def __init__(self,top_level_dir=None):
         '''
@@ -22,22 +25,32 @@ class filesysDB(object):
             top_level_dir = os.environ.get('YTVELMODELDIR')
 
         if top_level_dir is None:
-            raise ValueError(("Could not intialize filesysDB: top_level_dir is None and "
-                   "environment variable YTVELMODELDIR is not set."))
+            top_level_dir=default_db_path
 
         self.db_path=top_level_dir
         self.buildFileDictionary()
         return
 
     def buildFileDictionary(self):
+        ''' builds dictionaries of available files '''
         self.FileDict = {}
+        self.FilesByDir = {
+            'IRIS_models':[],
+            'IRIS_refModels':[],
+            'shapedata':[]
+        }
         for root, subdirs, files in os.walk(self.db_path):
             fileList=files # files in this root
             for file in files:
-                self.FileDict[file]=os.path.join(root,file)
+                full_fi=os.path.join(root,file)
+                self.FileDict[file]=full_fi
+                for dirname in self.FilesByDir.keys():
+                    if dirname in full_fi:
+                        self.FilesByDir[dirname].append(file)
         return
 
     def validateFile(self,fname):
+        ''' checks if file exists, returns the filename if it does, False if not '''
         validFile=False
         if os.path.isfile(fname):
             validFile=fname
@@ -58,12 +71,7 @@ class initializeDB(filesysDB):
             top_level_dir = os.environ.get('YTVELMODELDIR')
 
         if top_level_dir is None:
-            pathmsg=("YTVELMODELDIR environment variable is not set, please "
-                "enter a path to install the filesystem cache (or hit enter"
-                " to use default): ")
-            top_level_dir=input(pathmsg)
-            if len(top_level_dir)==0:
-                top_level_dir=os.path.join(os.path.expanduser("~"),'.ytvelmodeldata')
+            top_level_dir=default_db_path
 
         if top_level_dir is not None and os.path.isdir(top_level_dir) is False:
             try:
@@ -90,7 +98,7 @@ class initializeDB(filesysDB):
         """ builds the top level subdirectories """
         # build the subdirectories
         print(os.linesep+"Building directory structure at "+self.db_path)
-        for db_dir in ['IRIS_models','shapedata','IRIS_refModels']:
+        for db_dir in ['IRIS_models','shapedata','IRIS_refModels','interpolated_models']:
             newdir=os.path.join(self.db_path,db_dir)
             if os.path.isdir(newdir) is True:
                 print('    '+db_dir+' already exists')

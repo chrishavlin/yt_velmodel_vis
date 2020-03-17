@@ -8,6 +8,7 @@ import os
 import numpy as np
 import yt
 from scipy import spatial
+from . import datamanager as dm
 
 def sphere2cart(phi,theta,radius):
     '''
@@ -45,46 +46,17 @@ class netcdf(object):
     class for working with 3D models from iris
     '''
     def __init__(self,fname=None,load_ds=True):
-        self.fname=fname
-        self.model_dir=os.environ['YTVELMODELDIR']
-        if fname is not None:
-            self.validateFile(fname)
+
+        self.db=dm.filesysDB()
+        fullfilename=self.db.validateFile(fname)
+        if fullfilename is not False:
+            self.fname=fullfilename
             self.load()
+        else:
+            print('Could not find file '+fname)
 
         return
-
-    def validateFile(self,fname):
-        '''
-        validateFile
-
-        checks that model file exists, searches model directory if not found
-        initially.
-
-        Parameters
-        ----------
-        fname : the filename provided (required)
-
-        Returns
-        -------
-        validFile : boolean for existence.
-        '''
-        validFile=False
-        if os.path.isfile(fname):
-            validFile=True
-        else:
-            if self.model_dir is not None:
-                print("file not found, searching model directory, "+self.model_dir)
-                for root, dirs, files in os.walk(self.model_dir):
-                    if fname in files:
-                        self.fname=os.path.join(root,fname)
-                        validFile=True
-                if validFile:
-                    print("found matching model file:"+self.fname)
-                else:
-                    print("could not find model file "+fname)
-
-        return validFile
-
+    
 
     def load(self,fname=None):
         '''

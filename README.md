@@ -13,10 +13,10 @@ to install with pip or conda.
 # setting up yt_velmodel_vis
 
 After you have the above dependencies installed, you can install this package in two steps:
-1. setting environment variables
+1. (optional) setting environment variables
 2. package installation with `pip`
 
-## 1. setting environment variables
+## 1. (optional) setting environment variables
 
 The example scripts and some `yt_velmodel_vis` classes require datafiles to be stored in a local filesystem database (cache). The location of this database is controlled by the directory stored in the environment variable `YTVELMODELDIR`.
 
@@ -27,6 +27,8 @@ To add an environment variable on a unix system using a bash shell, add the foll
 ```
 export YTVELMODELDIR=/path/to/yt_data/velocity_models
 ```
+
+If you do not set `YTVELMODELDIR`, then models will be installed in `~/.ytvelmodeldata/`. 
 
 ## 2. package installation
 

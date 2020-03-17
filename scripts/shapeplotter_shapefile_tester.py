@@ -10,9 +10,7 @@ import geopandas as gpd
 fname='NWUS11-S_percent.nc'
 out_dir='./output'
 
-db=dm.filesysDB()
-fullfi=db.validateFile(fname)
-model=sm.netcdf(fullfi)
+model=sm.netcdf(fname)
 
 # interpolate the cartesian (or load it if it exists)
 mx=50000
@@ -42,7 +40,6 @@ tf.add_step(-2, -1, [1.0, 0.5, 0., .8])
 # load the data as a uniform grid, create the 3d scene
 sc_mult=1.0 # scale multiplier
 bbox = model.cart['bbox'] # list-like [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
-print(bbox)
 ds = yt.load_uniform_grid(data,data['dvs'].shape,sc_mult,bbox=bbox,nprocs=1,
                         periodicity=(True,True,True),unit_system="mks")
 
@@ -72,15 +69,24 @@ sc=sp.addShapeToScene(sc,YS_lat,YS_lon,YS_rads,'PointSource',[1.,.9,.9,0.005],6)
 
 ## add data from a shapefile
 print('adding volcanic fields')
-fullfi=db.validateFile('GLB_VOLC.shp')
 shp_bbox=[lon_rnge[0],lat_rnge[0],lon_rnge[1],lat_rnge[1]]
-volcs=sp.shapedata(fullfi,radius=R*1000.,buildTraces=False)
+volcs=sp.shapedata('global_volcanos',radius=R*1000.,buildTraces=False)
 sc=volcs.buildTraces(RGBa=[0.,0.8,0.,0.05],bbox=shp_bbox,sc=sc)
 
 print("adding state bounds")
-us_states=db.validateFile('cb_2018_us_state_20m.shp')
-continents=sp.shapedata(us_states,bbox=shp_bbox,radius=R*1000.)
+continents=sp.shapedata('us_states',bbox=shp_bbox,radius=R*1000.)
 sc=continents.addToScene(sc)
+
+
+print("adding tectonic boundaries")
+clrs={
+    'transform':[0.8,0.,0.8,0.05],
+    'ridge':[0.,0.,0.8,0.05],
+    'trench':[0.8,0.,0.,0.05],
+}
+for bound in ['transform','ridge','trench']:
+    tect=sp.shapedata(bound,radius=R*1000.,buildTraces=False)
+    sc=tect.buildTraces(RGBa=clrs[bound],sc=sc,bbox=shp_bbox)
 
 
 Rmax=6371*1000.

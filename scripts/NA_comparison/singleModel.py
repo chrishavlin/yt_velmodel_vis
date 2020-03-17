@@ -60,8 +60,7 @@ model_settings={
 fname='NA07_percent.nc'
 out_dir='./output/'+fname.split('.')[0] # for figures
 derived_data_dir='./data' # for derived data (interpolations )
-db=dm.filesysDB()
-model=sm.netcdf(db.validateFile(fname))
+model=sm.netcdf(fname)
 
 shortname=fname.split('.')[0]
 settings=model_settings[fname]
@@ -132,11 +131,11 @@ max_dep=1200.
 R=6371.
 r_rnge=[(R-max_dep)*1000.,(R-min_dep)*1000.]
 Chunk=sp.sphericalChunk(lat_rnge,lon_rnge,r_rnge)
-sc=Chunk.domainExtent(sc,RGBa=[1.,1.,1.,0.001],n_latlon=100,n_rad=50)
-sc=Chunk.latlonGrid(sc,RGBa=[1.,1.,1.,0.001])
+sc=Chunk.domainExtent(sc,RGBa=[1.,1.,1.,0.005],n_latlon=100,n_rad=50)
+sc=Chunk.latlonGrid(sc,RGBa=[1.,1.,1.,0.01])
 # sc=Chunk.latlonGrid(sc,RGBa=[1.,1.,1.,0.001],radius=(R-410.)*1000.)
-sc=Chunk.latlonGrid(sc,RGBa=[1.,1.,1.,0.001],radius=(R-max_dep)*1000.)
-sc=Chunk.wholeSphereReference(sc,RGBa=[1.,1.,1.,0.001])
+sc=Chunk.latlonGrid(sc,RGBa=[1.,1.,1.,0.005],radius=(R-max_dep)*1000.)
+sc=Chunk.wholeSphereReference(sc,RGBa=[1.,1.,1.,0.005])
 
 YS_lat=np.array([44.429764])
 YS_lon=np.array([-110.584663])
@@ -144,15 +143,24 @@ YS_rads=np.array([6371.*1e3])
 sc=sp.addShapeToScene(sc,YS_lat,YS_lon,YS_rads,'PointSource',[1.,1.,1.,0.005],6)
 
 print('adding volcanic fields')
-fullfi=db.validateFile('GLB_VOLC.shp')
 shp_bbox=[lon_rnge[0],lat_rnge[0],lon_rnge[1],lat_rnge[1]]
-volcs=sp.shapedata(fullfi,radius=R*1000.,buildTraces=False)
+volcs=sp.shapedata('global_volcanos',radius=R*1000.,buildTraces=False)
 sc=volcs.buildTraces(RGBa=[0.,0.8,0.,0.05],bbox=shp_bbox,sc=sc)
 
 print("adding state bounds")
-us_states=db.validateFile('cb_2018_us_state_20m.shp')
-continents=sp.shapedata(us_states,bbox=shp_bbox,radius=R*1000.)
+continents=sp.shapedata('us_states',bbox=shp_bbox,radius=R*1000.)
 sc=continents.addToScene(sc)
+
+print('adding plate boundaries')
+clrs={
+    'transform':[0.8,0.,0.8,0.05],
+    'ridge':[0.,0.,0.8,0.05],
+    'trench':[0.8,0.,0.,0.05],
+}
+for bound in ['transform','ridge','trench']:
+    tect=sp.shapedata(bound,radius=R*1000.,buildTraces=False)
+    sc=tect.buildTraces(RGBa=clrs[bound],sc=sc,bbox=shp_bbox)
+
 
 # set north through domain center
 # bbox = model.cart['bbox'] # list-like [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
