@@ -6,7 +6,6 @@ class PostDevelopCommand(develop):
     """Post-installation for development mode: initialize the filesystem db"""
     def run(self):
         develop.run(self)
-        # PUT YOUR POST-INSTALL SCRIPT HERE or CALL A FUNCTION
         from yt_velmodel_vis import datamanager as dm
         dm.initializeDB()
 
@@ -17,8 +16,6 @@ class PostInstallCommand(install):
         install.run(self)
         from yt_velmodel_vis import datamanager as dm
         dm.initializeDB()
-
-        # PUT YOUR POST-INSTALL SCRIPT HERE or CALL A FUNCTION
 
 setup(name='yt_velmodel_vis',
       version='0.1',
