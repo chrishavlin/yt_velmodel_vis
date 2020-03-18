@@ -4,6 +4,7 @@ seis_model
 classes for initial loads and processing of seismic models for use with yt
 '''
 from netCDF4 import Dataset
+import h5py
 import os
 import numpy as np
 import yt
@@ -45,7 +46,7 @@ class netcdf(object):
 
     class for working with 3D models from iris
     '''
-    def __init__(self,fname=None,load_ds=True):
+    def __init__(self,fname=None,interpDict={}):
 
         self.db=dm.filesysDB()
         fullfilename=self.db.validateFile(fname)
@@ -55,8 +56,12 @@ class netcdf(object):
         else:
             print('Could not find file '+fname)
 
+        interpfield=interpDict.get('field',None)
+        if interpfield is not None:
+            self.loadInterpolated(**interpDict)
+
         return
-    
+
 
     def load(self,fname=None):
         '''
@@ -426,6 +431,7 @@ class netcdf(object):
             trees={}
             for fi in fields:
                 # build kdtree of non-null data for each variable
+                # (might not be OK to assume same location for non-null in each field)
                 fillval=getattr(self.data.variables[fi],'missing_value',np.nan)
                 data=self.data.variables[fi][:].data.ravel()
                 x_fi=xdata[data!=fillval]
@@ -450,6 +456,12 @@ class netcdf(object):
             # pts=np.column_stack((xdata,ydata,zdata))
             # indxs=np.array(range(0,len(xdata)))
             N_grid=len(xdata)
+
+            # query the tree at each new grid point and weight nearest neighbors
+            # by inverse distance.
+            # right now, we query every grid point, should limit those queries
+            # to gridpoints falling within domain. 
+
             print("querying kdtree on interpolated grid")
             chunk=100000
             N_chunks=int(N_grid/chunk)+1
@@ -463,7 +475,6 @@ class netcdf(object):
                 pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))
                 indxs=np.array(range(i_0,i_1))
                 for fi in fields:
-                    # print("    processing "+fi)
                     (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)
 
                     # remove points with all infs (no NN's within max_dist)
@@ -471,13 +482,8 @@ class netcdf(object):
                     tree_indxs=tree_indxs[m]
                     indxs=indxs[m]
                     dists=dists[m]
-                    #print(len(dists))
-                    #print(len(tree_indxs))
-                    #print("removed points with all infs")
-                    #print(len(dists))
-                    #print(len(tree_indxs))
 
-                    # print("    applying IDW to move data to grid")
+                    # IDW for set of NN's at each point (rewrite this!)
                     for gridpoint in range(0,len(tree_indxs)):
                         NN_indxs=tree_indxs[gridpoint]
                         NN_dists=dists[gridpoint]
@@ -505,3 +511,93 @@ class netcdf(object):
 
 
         return
+
+    def interpFilename(self,field,res=[10,10,10], input_units='km',max_dist=100):
+        '''
+        interpFilename()
+        returns the filename for an interpolated file
+
+        Parameters
+        ----------
+        **kwargs    the kwargs for for interp2cartesian()
+
+        Output
+        ------
+        fname       the full path filename of the interpolated file, whether
+                    or not it exists
+        '''
+
+        db_dir=os.path.join(self.db.db_path,'interpolated_models')
+
+        fullfname=getattr(self,'fname','')
+        model=os.path.splitext(os.path.basename(fullfname))[0]
+        fname='_'.join([model,field,str(max_dist),str(res[0]),str(res[1]),str(res[2])])
+        fname=fname+'.h5py'
+        return os.path.join(db_dir,fname)
+
+    def parseInterpFilename(self,fname):
+        '''
+        parseInterpFilename()
+        parses the filename of an interpolated file and returns the interpolation
+        settings
+
+        Parameters:
+        -----------
+        fname  the filename to parse
+
+        Output:
+        -------
+        interp_settings  dict with interpolation settings
+
+        '''
+        basename=os.path.splitext(os.path.basename(fname))[0]
+        settings=basename.split('_')
+        setfields=['model','field','max_distance','res_x','res_y','res_z']
+        return dict(zip(setfields,settings))
+
+    def loadInterpolated(self,field='dvs',**kwargs):
+        '''
+        loadInterpolated()
+        loads interpolated model file data
+
+        Parameters
+        ----------
+        field   the field to load/interpolate, string
+        **kwargs
+            the kwargs for for interp2cart: res, input_units, max_dist
+            generate    if True, will build the interpolation and save it if not found.
+        '''
+
+        res=kwargs.get('res',[10,10,10])
+        input_units=kwargs.get('input_units','km')
+        max_dist=kwargs.get('max_dist',100)
+
+        fname=self.interpFilename(field,res=res, input_units=input_units,max_dist=max_dist)
+        if os.path.isfile(fname):
+            # load it
+            if ~hasattr(self,'interp'):
+                self.interp={'data':{},'grid':{}}
+
+            with h5py.File(fname, 'r') as hf:
+                self.interp['data'][field] = hf[field][:]
+                for dim in ['x','y','z']:
+                    self.interp['grid'][dim] = hf[dim][:]
+
+            if ~hasattr(self,'cart'):
+                self.cart={}
+
+            self.cart['bbox']=[]
+            for dim in ['x','y','z']:
+                self.cart['bbox'].append([self.interp['grid'][dim].min(),
+                                          self.interp['grid'][dim].max()])
+            self.cart['bbox']=np.array(self.cart['bbox'])
+
+        elif kwargs.get('generate',True):
+            # generate it
+            self.interp2cartesian([field],res,input_units,max_dist)
+
+            # save it
+            with h5py.File(fname, 'w') as hf:
+                hf.create_dataset(field,  data=self.interp['data'][field],compression='gzip')
+                for dim in ['x','y','z']:
+                    hf.create_dataset(dim,  data=self.interp['grid'][dim],compression='gzip')
