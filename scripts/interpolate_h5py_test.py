@@ -15,18 +15,13 @@ out_dir='./output'
 interpDict=dict(field='dvs',res=[10000,10000,10000], input_units='m',max_dist=50000,interpChunk=int(1e6))
 model=sm.netcdf(fname,interpDict)
 
-# interpolate the cartesian (or load it if it exists)
-data={}
-data['dvs']=model.interp['data']['dvs']
-
-
 # load the data as a uniform grid, create the 3d scene
+data={'dvs':model.interp['data']['dvs']}
 sc_mult=1.0 # scale multiplier
 bbox = model.cart['bbox'] # list-like [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
 ds = yt.load_uniform_grid(data,data['dvs'].shape,sc_mult,bbox=bbox,nprocs=1,
                         periodicity=(True,True,True),unit_system="mks")
 sc = yt.create_scene(ds,'dvs')
-
 
 # add TF
 bnds=[-6,10.]
