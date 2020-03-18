@@ -7,8 +7,8 @@ import os
 import matplotlib.pyplot as plt
 import geopandas as gpd
 
-# fname='NWUS11-S_percent.nc'
-fname='NA07_percent.nc'
+fname='NWUS11-S_percent.nc'
+# fname='NA07_percent.nc'
 out_dir='./output'
 
 # load model, include interpolation
@@ -78,6 +78,6 @@ new_res=(res[0]*res_factor,res[1]*res_factor)
 sc.camera.set_resolution(new_res)
 source.set_transfer_function(tf)
 
-nm='shapeplotter_shapefile_vol.png'
+nm='interpolate_g5py_test_vol.png'
 print("saving "+nm)
 sc.save(os.path.join(out_dir,nm),sigma_clip=0.5)
