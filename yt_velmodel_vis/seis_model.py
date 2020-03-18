@@ -10,6 +10,7 @@ import numpy as np
 import yt
 from scipy import spatial
 from . import datamanager as dm
+from scipy.spatial import Delaunay
 
 def sphere2cart(phi,theta,radius):
     '''
@@ -39,6 +40,30 @@ def cart2sphere(x,y,z,geo=True):
         lat = lat - 90. # equator is at 0, +90 is N pole
 
     return (R,lat,lon)
+
+def in_convexHull(testPoints, hullPoints):
+    """
+    in_convexHull()
+
+    checks if testPoints fall within convex hull defined by points in hullPoints
+    Test if points in `p` are in `hull`
+
+    Parameters:
+    ----------
+    testPoints  array of coordinates to check: N x n_dim, N is number of points
+                to check, n_dim is number of dimensions
+    hullPoints  coordinates defining the convex hull: M x n_dim, M is number of
+                points on the hull, n_dim is number of dimensions.
+
+    Output:
+    -------
+    in_hull    boolean array of length N
+
+    """
+
+    hull = Delaunay(hullPoints) # builds Delaunay triangulation
+    in_hull = hull.find_simplex(testPoints)>=0 # find_simplex returns -1 if not in hull
+    return in_hull
 
 class netcdf(object):
     '''
@@ -370,6 +395,62 @@ class netcdf(object):
         setattr(self,'unstructured',uData)
         return
 
+    def checkDomain(self,xdata,ydata,zdata):
+        '''
+        checkDomain()
+
+        checks if cartesian coordinates fall within the original domain
+
+        Parameters:
+        -----------
+        xdata,ydata,zdata:   1-D arrays of length N where N is number of points
+
+        Output:
+        -------
+        in_hull:             1-D boolean of length N, True if in domain.
+        '''
+
+        # build hull framework from lat/lon/depth extents
+        hull_coords=[]
+
+        # pull out the lat/lon/depth arrays
+        lat=np.array(self.data.variables['latitude'])
+        lon=np.array(self.data.variables['longitude'])
+
+        try:
+            radius=np.array(self.data.variables['depth'])
+            radius=6371. - radius
+        except:
+            radius=np.array(self.data.variables['radius'])
+
+        # units and angle restrictions
+        radius=radius*1000
+        lat=( 90. - lat ) * np.pi / 180.
+        lon[lon<0]=lon[lon<0]+360.
+        lon = lon * np.pi / 180.
+
+        # min/max radius "planes"
+        lats,lons=np.meshgrid(lat,lon)
+        for rad in [radius.min(),radius.max()]:
+            x,y,z=sphere2cart(lats,lons,np.full(lats.shape,rad))
+            hull_coords.append(np.column_stack((x.ravel(),y.ravel(),z.ravel())))
+
+        # min/max lat "planes"
+        lons,rads=np.meshgrid(lon,radius)
+        for lat0 in [lat.min(),lat.max()]:
+            x,y,z=sphere2cart(np.full(lons.shape,lat0),lons,rads)
+            hull_coords.append(np.column_stack((x.ravel(),y.ravel(),z.ravel())))
+
+        # min/max lon "planes"
+        lats,rads=np.meshgrid(lat,radius)
+        for lon0 in [lon.min(),lon.max()]:
+            x,y,z=sphere2cart(lats,np.full(lats.shape,lon0),rads)
+            hull_coords.append(np.column_stack((x.ravel(),y.ravel(),z.ravel())))
+
+        hull_coords=np.concatenate(hull_coords)
+
+        return in_convexHull(np.column_stack((xdata,ydata,zdata)),hull_coords)
+
     def interp2cartesian(self,fields=[],res=[10,10,10], input_units='km',max_dist=100,store_trees=False):
         ''' moves geo-spherical data (radius/depth, lat, lon) to earth-centered
             cartesian coordinates using a kdtree
@@ -453,15 +534,18 @@ class netcdf(object):
             xdata=xdata.ravel(order='C')
             ydata=ydata.ravel(order='C')
             zdata=zdata.ravel(order='C')
-            # pts=np.column_stack((xdata,ydata,zdata))
-            # indxs=np.array(range(0,len(xdata)))
-            N_grid=len(xdata)
+            full_linear_indxs=np.array(range(0,len(xdata)))
+
+            # find those points falling within original domain
+            in_domain=self.checkDomain(xdata,ydata,zdata)
+            full_linear_indxs=full_linear_indxs[in_domain]
+            xdata=xdata[in_domain]
+            ydata=ydata[in_domain]
+            zdata=zdata[in_domain]
 
             # query the tree at each new grid point and weight nearest neighbors
             # by inverse distance.
-            # right now, we query every grid point, should limit those queries
-            # to gridpoints falling within domain. 
-
+            N_grid=len(xdata)
             print("querying kdtree on interpolated grid")
             chunk=100000
             N_chunks=int(N_grid/chunk)+1
@@ -473,7 +557,7 @@ class netcdf(object):
                 if i_1>N_grid:
                     i_1=N_grid
                 pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))
-                indxs=np.array(range(i_0,i_1))
+                indxs=full_linear_indxs[i_0:i_1]
                 for fi in fields:
                     (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)
 
