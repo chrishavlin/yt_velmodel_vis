@@ -451,15 +451,29 @@ class netcdf(object):
 
         return in_convexHull(np.column_stack((xdata,ydata,zdata)),hull_coords)
 
-    def interp2cartesian(self,fields=[],res=[10,10,10], input_units='km',max_dist=100,store_trees=False):
-        ''' moves geo-spherical data (radius/depth, lat, lon) to earth-centered
+    def interp2cartesian(self,fields=[],res=[10,10,10], input_units='km',
+                        max_dist=100,store_trees=False,interpChunk=500000):
+        '''
+        seis_model.netcdf4.interp2cartesian()
+        
+        moves geo-spherical data (radius/depth, lat, lon) to earth-centered
             cartesian coordinates using a kdtree
 
-        parameters
+        Parameters:
         ----------
-        fields: the fields to interpolate to the grid
-        res: list of resolution in x,y,z
-        input_units: the units of res (final coord system will be in these units)
+        fields          the fields to interpolate to the grid
+        res             list of resolution in x,y,z
+        input_units     the units of res (final coord system will be in these units)
+        max_dist        the max distance away for nearest neighbor search
+        store_trees     if True, will store the kdtree(s) generated
+        interpChunk     the chunk size for querying the kdtree.
+
+        Output:
+        ------
+        adds an 'interp' attribute to netcdf:
+        netcdf.interp['grid']={'x':X,'y':Y,'z':Z}   dict of x,y,z 1D arrays (not meshgrid)
+        netcdf.interp['data'][field]             3D np array of shape (Nx,Ny,Nz)
+                                                 for each field in fields
         '''
 
         self.interp={}
@@ -534,30 +548,31 @@ class netcdf(object):
             xdata=xdata.ravel(order='C')
             ydata=ydata.ravel(order='C')
             zdata=zdata.ravel(order='C')
-            full_linear_indxs=np.array(range(0,len(xdata)))
 
-            # find those points falling within original domain
-            in_domain=self.checkDomain(xdata,ydata,zdata)
-            full_linear_indxs=full_linear_indxs[in_domain]
-            xdata=xdata[in_domain]
-            ydata=ydata[in_domain]
-            zdata=zdata[in_domain]
+            # limit to the points only in domain (not worth the overhead)
+            #     full_linear_indxs=np.array(range(0,len(xdata)))
+            #     in_domain=self.checkDomain(xdata,ydata,zdata)
+            #     full_linear_indxs=full_linear_indxs[in_domain]
+            #     xdata=xdata[in_domain]
+            #     ydata=ydata[in_domain]
+            #     zdata=zdata[in_domain]
 
             # query the tree at each new grid point and weight nearest neighbors
-            # by inverse distance.
+            # by inverse distance. proceed in chunks.
             N_grid=len(xdata)
             print("querying kdtree on interpolated grid")
-            chunk=100000
+            chunk=interpChunk
             N_chunks=int(N_grid/chunk)+1
             print("breaking into "+str(N_chunks)+' chunks')
             for i_chunk in range(0,N_chunks):
-                print("   processing chunk "+str(i_chunk)+" of "+str(N_chunks))
+                print("   processing chunk "+str(i_chunk+1)+" of "+str(N_chunks))
                 i_0=i_chunk*chunk
                 i_1=i_0+chunk
                 if i_1>N_grid:
                     i_1=N_grid
                 pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))
-                indxs=full_linear_indxs[i_0:i_1]
+
+                indxs=np.array(range(i_0,i_1)) # the linear indeces of this chunk
                 for fi in fields:
                     (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)
 
@@ -567,21 +582,17 @@ class netcdf(object):
                     indxs=indxs[m]
                     dists=dists[m]
 
-                    # IDW for set of NN's at each point (rewrite this!)
-                    for gridpoint in range(0,len(tree_indxs)):
-                        NN_indxs=tree_indxs[gridpoint]
-                        NN_dists=dists[gridpoint]
-                        NN_indxs=NN_indxs[~np.isinf(NN_dists)]
-                        NN_dists=NN_dists[~np.isinf(NN_dists)]
-                        full_indx=np.unravel_index(indxs[gridpoint],orig_shape,order='C')
+                    # IDW with array manipulation
+                    # Build weighting matrix
+                    wts=1/dists
+                    wts= wts / np.sum(wts,axis=1)[:,np.newaxis] # shape (N,8)
+                    vals=trees[fi]['data'][tree_indxs] # shape (N,8)
+                    vals=vals * wts
+                    vals=np.sum(vals,axis=1) # shape (N,)
 
-                        if len(NN_indxs)==1:
-                            self.interp['data'][fi][full_indx]=trees[fi]['data'][NN_indxs]
-                        elif len(NN_indxs)>1:
-                            vals=trees[fi]['data'][NN_indxs]
-                            wts=1/NN_dists
-                            wts=wts / wts.sum()
-                            self.interp['data'][fi][full_indx]=np.dot(wts,vals)
+                    # store in proper indeces
+                    full_indxs=np.unravel_index(indxs,orig_shape,order='C')
+                    self.interp['data'][fi][full_indxs]=vals
 
             if store_trees:
                 self.interp['trees']=trees
@@ -655,6 +666,7 @@ class netcdf(object):
         res=kwargs.get('res',[10,10,10])
         input_units=kwargs.get('input_units','km')
         max_dist=kwargs.get('max_dist',100)
+        chunk=kwargs.get('interpChunk',500000)
 
         fname=self.interpFilename(field,res=res, input_units=input_units,max_dist=max_dist)
         if os.path.isfile(fname):
@@ -678,7 +690,7 @@ class netcdf(object):
 
         elif kwargs.get('generate',True):
             # generate it
-            self.interp2cartesian([field],res,input_units,max_dist)
+            self.interp2cartesian([field],res,input_units,max_dist,interpChunk=chunk)
 
             # save it
             with h5py.File(fname, 'w') as hf:

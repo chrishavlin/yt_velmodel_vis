@@ -8,11 +8,11 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 
 fname='NWUS11-S_percent.nc'
-# fname='NA07_percent.nc'
+fname='NA07_percent.nc'
 out_dir='./output'
 
 # load model, include interpolation
-interpDict=dict(field='dvs',res=[10000,10000,10000], input_units='m',max_dist=50000)
+interpDict=dict(field='dvs',res=[10000,10000,10000], input_units='m',max_dist=50000,interpChunk=int(1e6))
 model=sm.netcdf(fname,interpDict)
 
 # interpolate the cartesian (or load it if it exists)
