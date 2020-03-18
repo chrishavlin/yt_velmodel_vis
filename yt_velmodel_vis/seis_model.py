@@ -14,17 +14,21 @@ from scipy.spatial import Delaunay
 
 def sphere2cart(phi,theta,radius):
     '''
-    sphere2cart
+    seis_model.sphere2cart(phi,theta,radius)
+
+    transformation from yt spherical coordinates to cartesian
 
     Parameters
     ----------
-    phi: angle from north in radians (0 = north pole)
-    theta: longitudinal angle in radians
-    radius: radius, in any units
+    phi     np array, angle from north in radians (0 = north pole)
+    theta   np array,longitudinal angle in radians
+    radius  np array, radius in any units
+
+    all arrays must be the same size (or 2 of 3 can be scalars)
 
     Returns
     -------
-    (x,y,z) : tuple of cartesian x,y,z in units of radus
+    (x,y,z) : tuple of cartesian x,y,z in same units as radius
     '''
     x=radius * np.sin(phi) * np.sin(theta)
     y=radius * np.sin(phi) * np.cos(theta)
@@ -32,6 +36,25 @@ def sphere2cart(phi,theta,radius):
     return (x,y,z)
 
 def cart2sphere(x,y,z,geo=True):
+    '''
+    seis_model.cart2sphere(x,y,z,geo=True)
+
+    transformation from cartesian to spherical coordinates
+
+    Parameters
+    ----------
+    x, y, z   cartesian coordinate arrays
+    geo       boolean, if True then latitude is 0 at equator, otherwise 0 at
+              the north pole.
+
+    all arrays must be the same size (or 2 of 3 can be scalars)
+
+    Returns
+    -------
+    (R,lat,lon) : tuple of cartesian radius, lat and lon (lat,lon in degrees)
+
+    '''
+    seis_model.cart2sphere
     xy = x**2 + y**2
     R = np.sqrt(xy + z**2)
     lat = np.arctan2(np.sqrt(xy), z)*180./np.pi
@@ -40,30 +63,6 @@ def cart2sphere(x,y,z,geo=True):
         lat = lat - 90. # equator is at 0, +90 is N pole
 
     return (R,lat,lon)
-
-def in_convexHull(testPoints, hullPoints):
-    """
-    in_convexHull()
-
-    checks if testPoints fall within convex hull defined by points in hullPoints
-    Test if points in `p` are in `hull`
-
-    Parameters:
-    ----------
-    testPoints  array of coordinates to check: N x n_dim, N is number of points
-                to check, n_dim is number of dimensions
-    hullPoints  coordinates defining the convex hull: M x n_dim, M is number of
-                points on the hull, n_dim is number of dimensions.
-
-    Output:
-    -------
-    in_hull    boolean array of length N
-
-    """
-
-    hull = Delaunay(hullPoints) # builds Delaunay triangulation
-    in_hull = hull.find_simplex(testPoints)>=0 # find_simplex returns -1 if not in hull
-    return in_hull
 
 class netcdf(object):
     '''
@@ -141,9 +140,27 @@ class netcdf(object):
 
     def coordTransform(self,method='geo2spherical'):
         '''
-        coordTransform
+        seis_model.netcdf.coordTransform()
 
-        some coordinate transforms
+        some coordinate transformations
+
+        Parameters:
+        ----------
+        method  the method to use:
+                'geo2spherical': converts lat/lon/radius to spherical coordinates
+                                 conventions used by yt (i.e., N. pole is 0, not +90)
+                'sphere2cart': conerts spherical coordinates to cartesian
+                               coordinates.
+
+        Output:
+        ------
+        sets attributes depending on method.
+        For geo2spherical, sets:
+            netcdf.spherical    a dictionary with coordinate arrays and bounding
+                                box info
+        For sphere2cart, sets:
+            netcdf.spherical    a dictionary with coordinate arrays and bounding
+                                box info
         '''
 
         if method=='geo2spherical':
@@ -219,96 +236,6 @@ class netcdf(object):
 
         return
 
-    def generateDepthSlices(self,dfield,depths=[],ds=None,latlonRnge=None,
-        outDir=None,bbox=None,SavePrefix='',data_min=None,data_max=None,fillval=np.nan):
-        '''generateDepthSlices()
-        generates depth slices naively using uniform data loader
-
-        '''
-        if latlonRnge is None:
-            bnds={
-            'longitude':[float(self.data.geospatial_lon_min),
-                        float(self.data.geospatial_lon_max)],
-            'latitude':[float(self.data.geospatial_lat_min),
-                        float(self.data.geospatial_lat_max)],
-            'depth':[float(self.data.geospatial_vertical_min),
-                    float(self.data.geospatial_vertical_max)]
-            }
-
-            for bnd in [0,1]:
-                if bnds['latitude'][bnd] > 180:
-                   bnds['latitude'][bnd]=bnds['latitude'][bnd]-360
-        else:
-            bnds=latlonRnge
-
-        clalon=(np.mean(bnds['latitude']),np.mean(bnds['longitude']))
-        data={}
-        data[dfield]=self.data.variables[dfield][:]
-        data[dfield] = np.transpose(data[dfield], (2, 1, 0))
-        data[dfield][data[dfield]==self.data[dfield].missing_value]=fillval
-
-        if data_min is not None:
-            data[dfield][data[dfield]<data_min]=fillval
-
-        if data_max is not None:
-            data[dfield][data[dfield]>data_max]=fillval
-
-        if ds is None:
-            sc_mult=1.0 # scale multiplier
-            bbox = np.array([bnds['longitude'],bnds['latitude'],bnds['depth']])
-            ds = yt.load_uniform_grid(data,data[dfield].shape,sc_mult,bbox=bbox,nprocs=1,periodicity=(False,False,False))
-
-        clon=np.mean(bnds['longitude'])
-        clat=np.mean(bnds['latitude'])
-        for d_slice in depths:
-            cnt=[clon,clat,d_slice]
-            slc=yt.SlicePlot(ds,'z',dfield,center=cnt)
-            slc.set_log(dfield, False)
-            slc.set_ylabel("lat - center lat")
-            slc.set_xlabel("lon - center lon")
-            slc.set_cmap(dfield, 'gist_heat')
-            slc.annotate_title("Depth = "+str(int(d_slice))+' km, C='+str(clalon))
-            if outDir is not None:
-               slc.save(os.path.join(outDir,SavePrefix+'_slice_'+str(int(d_slice))))
-
-        return
-
-    # def addBoundaryHighlights(self,data_field,bound_vals,data=None,newFill=None):
-    #     '''
-    #     sets the values of the data on the boundaries to specified values and
-    #     returns the modified data array. When volume rendering, add TF gaussians
-    #     at these boundary values to highlight the domain extents.
-    #
-    #     Parameters
-    #     ----------
-    #     data_field   the data field to set and return
-    #     bound_vals   dict, the boundary values to set. e.g.,:
-    #             bound_vals={'x':[9999.,9998],'y':[9997.,9996],'z':[9995.,9994]}
-    #     data    (optional) the data array. If None, will pull data_field from
-    #             loaded dataset
-    #
-    #     '''
-    #
-    #     try:
-    #         dims = list(self.data.variables[data_field].dimensions)
-    #         if data is None:
-    #             data = self.data.variables[data_field][:]
-    #     except:
-    #         raise ValueError('netcdf object does not have data loaded')
-    #
-    #     if newFill is not None:
-    #         data.fill_value=newFill
-    #
-    #     for dim in dims:
-    #         print(dim)
-    #         if dim in bound_vals.keys():
-    #             vals=bound_vals[dim]
-    #             print(vals)
-    #             this_dim=self.data.variables[dim][:]
-    #             data[this_dim==this_dim.min()]=vals[0]
-    #             data[this_dim==this_dim.max()]=vals[1]
-    #     return data
-
     def moveToUnstructured(self,fields=[],coordfields=[]):
         '''
         moves regular geo-spherical mesh to unstructured mesh in x,y,z
@@ -316,6 +243,8 @@ class netcdf(object):
         (x,y,z)=(0,0,0) is planet center
 
         data should be depth, latitude, longitude coords
+
+        (not worth it, use interp2cartesian())
         '''
 
         uData={}
@@ -399,7 +328,8 @@ class netcdf(object):
         '''
         checkDomain()
 
-        checks if cartesian coordinates fall within the original domain
+        checks if cartesian coordinates fall within the original domain using
+        in_convexHull. Generally not worth the overhead.
 
         Parameters:
         -----------
@@ -455,7 +385,7 @@ class netcdf(object):
                         max_dist=100,store_trees=False,interpChunk=500000):
         '''
         seis_model.netcdf4.interp2cartesian()
-        
+
         moves geo-spherical data (radius/depth, lat, lon) to earth-centered
             cartesian coordinates using a kdtree
 
@@ -607,16 +537,19 @@ class netcdf(object):
 
         return
 
-    def interpFilename(self,field,res=[10,10,10], input_units='km',max_dist=100):
+    def interpFilename(self,field,res=[10,10,10], max_dist=100):
         '''
-        interpFilename()
+        seis_model.netcdf4.interpFilename(field,res,max_dist)
+        
         returns the filename for an interpolated file
 
-        Parameters
+        Parameters:
         ----------
-        **kwargs    the kwargs for for interp2cartesian()
+        field   the data field
+        res     resolution list
+        mx_dist max distance for NN search
 
-        Output
+        Output:
         ------
         fname       the full path filename of the interpolated file, whether
                     or not it exists
@@ -632,7 +565,8 @@ class netcdf(object):
 
     def parseInterpFilename(self,fname):
         '''
-        parseInterpFilename()
+        seis_model.netcdf4.parseInterpFilename(fname)
+
         parses the filename of an interpolated file and returns the interpolation
         settings
 
@@ -652,15 +586,25 @@ class netcdf(object):
 
     def loadInterpolated(self,field='dvs',**kwargs):
         '''
-        loadInterpolated()
-        loads interpolated model file data
+        seis_model.netcdf.loadInterpolated()
 
-        Parameters
+        loads interpolated model file data. Will generate interpolated data if
+        it does not exist (unless kwarg generate=False)
+
+        Parameters:
         ----------
         field   the field to load/interpolate, string
         **kwargs
             the kwargs for for interp2cart: res, input_units, max_dist
             generate    if True, will build the interpolation and save it if not found.
+
+        Output:
+        ------
+        adds an 'interp' attribute to netcdf:
+        netcdf.interp['grid']={'x':X,'y':Y,'z':Z}   dict of x,y,z 1D arrays (not meshgrid)
+        netcdf.interp['data'][field]             3D np array of shape (Nx,Ny,Nz)
+                                                 for each field in fields
+
         '''
 
         res=kwargs.get('res',[10,10,10])
@@ -668,7 +612,7 @@ class netcdf(object):
         max_dist=kwargs.get('max_dist',100)
         chunk=kwargs.get('interpChunk',500000)
 
-        fname=self.interpFilename(field,res=res, input_units=input_units,max_dist=max_dist)
+        fname=self.interpFilename(field,res=res,max_dist=max_dist)
         if os.path.isfile(fname):
             # load it
             if ~hasattr(self,'interp'):
@@ -697,3 +641,29 @@ class netcdf(object):
                 hf.create_dataset(field,  data=self.interp['data'][field],compression='gzip')
                 for dim in ['x','y','z']:
                     hf.create_dataset(dim,  data=self.interp['grid'][dim],compression='gzip')
+
+        return
+
+def in_convexHull(testPoints, hullPoints):
+    """
+    in_convexHull()
+
+    checks if testPoints fall within convex hull defined by points in hullPoints
+    Test if points in `p` are in `hull`
+
+    Parameters:
+    ----------
+    testPoints  array of coordinates to check: N x n_dim, N is number of points
+                to check, n_dim is number of dimensions
+    hullPoints  coordinates defining the convex hull: M x n_dim, M is number of
+                points on the hull, n_dim is number of dimensions.
+
+    Output:
+    -------
+    in_hull    boolean array of length N
+
+    """
+
+    hull = Delaunay(hullPoints) # builds Delaunay triangulation
+    in_hull = hull.find_simplex(testPoints)>=0 # find_simplex returns -1 if not in hull
+    return in_hull

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 
 fname='NWUS11-S_percent.nc'
-fname='NA07_percent.nc'
+# fname='NA07_percent.nc'
 out_dir='./output'
 
 # load model, include interpolation
@@ -33,6 +33,7 @@ bnds=[-6,10.]
 tf = yt.ColorTransferFunction((bnds[0],bnds[1]))
 tf.add_step(-3, -2, [1.0, 0., 0., 1.0])
 tf.add_step(-2, -1, [1.0, 0.5, 0., .8])
+tf.add_step(-0.3, -0.7, [1.0, 0.5, 0., .6])
 
 # Draw boundary extents, helpful grids
 lat_rnge=[np.min(model.data.variables['latitude']),np.max(model.data.variables['latitude'])]
