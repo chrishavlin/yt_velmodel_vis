@@ -1,42 +1,47 @@
-'''
+"""
 seis_model
 
 classes for initial loads and processing of seismic models for use with yt
-'''
+"""
 from netCDF4 import Dataset
 import h5py
 import os
 import numpy as np
 import yt
 from scipy import spatial
+from scipy.interpolate import interp1d
 from . import datamanager as dm
 from scipy.spatial import Delaunay
+import pandas as pd
 
 def sphere2cart(phi,theta,radius):
-    '''
+    """
     seis_model.sphere2cart(phi,theta,radius)
 
     transformation from yt spherical coordinates to cartesian
 
     Parameters
     ----------
-    phi     np array, angle from north in radians (0 = north pole)
-    theta   np array,longitudinal angle in radians
-    radius  np array, radius in any units
+    phi : ndarray or scalar float/ing
+        angle from north in radians (0 = north pole)
+    theta : ndarray or scalar float/ing
+        longitudinal angle in radians
+    radius : ndarray or scalar float/ing
+        radius in any units
 
     all arrays must be the same size (or 2 of 3 can be scalars)
 
     Returns
     -------
     (x,y,z) : tuple of cartesian x,y,z in same units as radius
-    '''
+    """
     x=radius * np.sin(phi) * np.sin(theta)
     y=radius * np.sin(phi) * np.cos(theta)
     z=radius * np.cos(phi)
     return (x,y,z)
 
 def cart2sphere(x,y,z,geo=True):
-    '''
+    """
     seis_model.cart2sphere(x,y,z,geo=True)
 
     transformation from cartesian to spherical coordinates
@@ -53,7 +58,7 @@ def cart2sphere(x,y,z,geo=True):
     -------
     (R,lat,lon) : tuple of cartesian radius, lat and lon (lat,lon in degrees)
 
-    '''
+    """
     seis_model.cart2sphere
     xy = x**2 + y**2
     R = np.sqrt(xy + z**2)
@@ -65,11 +70,11 @@ def cart2sphere(x,y,z,geo=True):
     return (R,lat,lon)
 
 class netcdf(object):
-    '''
+    """
     netcdf
 
     class for working with 3D models from iris
-    '''
+    """
     def __init__(self,fname=None,interpDict={}):
 
         self.db=dm.filesysDB()
@@ -88,7 +93,7 @@ class netcdf(object):
 
 
     def load(self,fname=None):
-        '''
+        """
         load
 
         loads netcdf file, stores useful attributes
@@ -104,7 +109,7 @@ class netcdf(object):
         coords: list of coordinates, list of str
         ndim: number of dimensions, integer
         varshape: the shape of the variables, tuple of len 3
-        '''
+        """
         if fname is None:
             try:
                 fname=self.fname
@@ -119,12 +124,12 @@ class netcdf(object):
         return
 
     def setUsefulInfo(self):
-        '''
+        """
         setUsefulInfo()
 
         copies netcdf characteristics to attributes for easy access
 
-        '''
+        """
 
         self.coords={}
         for key, value in self.data.dimensions.items():
@@ -136,15 +141,16 @@ class netcdf(object):
             if key not in list(self.coords.keys()):
                 self.varinfo[key]={'shape':value.shape}
 
+        self.fields=list(self.varinfo.keys())
         return
 
     def coordTransform(self,method='geo2spherical'):
-        '''
+        """
         seis_model.netcdf.coordTransform()
 
         some coordinate transformations
 
-        Parameters:
+        Parameters
         ----------
         method  the method to use:
                 'geo2spherical': converts lat/lon/radius to spherical coordinates
@@ -152,7 +158,7 @@ class netcdf(object):
                 'sphere2cart': conerts spherical coordinates to cartesian
                                coordinates.
 
-        Output:
+        Returns
         ------
         sets attributes depending on method.
         For geo2spherical, sets:
@@ -161,7 +167,7 @@ class netcdf(object):
         For sphere2cart, sets:
             netcdf.spherical    a dictionary with coordinate arrays and bounding
                                 box info
-        '''
+        """
 
         if method=='geo2spherical':
             # convert lat/lon/depth to spherical coordinates:
@@ -237,7 +243,7 @@ class netcdf(object):
         return
 
     def moveToUnstructured(self,fields=[],coordfields=[]):
-        '''
+        """
         moves regular geo-spherical mesh to unstructured mesh in x,y,z
 
         (x,y,z)=(0,0,0) is planet center
@@ -245,7 +251,7 @@ class netcdf(object):
         data should be depth, latitude, longitude coords
 
         (not worth it, use interp2cartesian())
-        '''
+        """
 
         uData={}
 
@@ -325,20 +331,20 @@ class netcdf(object):
         return
 
     def checkDomain(self,xdata,ydata,zdata):
-        '''
+        """
         checkDomain()
 
         checks if cartesian coordinates fall within the original domain using
         in_convexHull. Generally not worth the overhead.
 
-        Parameters:
+        Parameters
         -----------
         xdata,ydata,zdata:   1-D arrays of length N where N is number of points
 
-        Output:
+        Returns
         -------
         in_hull:             1-D boolean of length N, True if in domain.
-        '''
+        """
 
         # build hull framework from lat/lon/depth extents
         hull_coords=[]
@@ -383,13 +389,13 @@ class netcdf(object):
 
     def interp2cartesian(self,fields=[],res=[10,10,10], input_units='km',
                         max_dist=100,store_trees=False,interpChunk=500000):
-        '''
+        """
         seis_model.netcdf4.interp2cartesian()
 
         moves geo-spherical data (radius/depth, lat, lon) to earth-centered
             cartesian coordinates using a kdtree
 
-        Parameters:
+        Parameters
         ----------
         fields          the fields to interpolate to the grid
         res             list of resolution in x,y,z
@@ -398,13 +404,13 @@ class netcdf(object):
         store_trees     if True, will store the kdtree(s) generated
         interpChunk     the chunk size for querying the kdtree.
 
-        Output:
+        Returns
         ------
         adds an 'interp' attribute to netcdf:
         netcdf.interp['grid']={'x':X,'y':Y,'z':Z}   dict of x,y,z 1D arrays (not meshgrid)
         netcdf.interp['data'][field]             3D np array of shape (Nx,Ny,Nz)
                                                  for each field in fields
-        '''
+        """
 
         self.interp={}
 
@@ -538,22 +544,22 @@ class netcdf(object):
         return
 
     def interpFilename(self,field,res=[10,10,10], max_dist=100):
-        '''
+        """
         seis_model.netcdf4.interpFilename(field,res,max_dist)
-        
+
         returns the filename for an interpolated file
 
-        Parameters:
+        Parameters
         ----------
         field   the data field
         res     resolution list
         mx_dist max distance for NN search
 
-        Output:
+        Returns
         ------
         fname       the full path filename of the interpolated file, whether
                     or not it exists
-        '''
+        """
 
         db_dir=os.path.join(self.db.db_path,'interpolated_models')
 
@@ -564,48 +570,48 @@ class netcdf(object):
         return os.path.join(db_dir,fname)
 
     def parseInterpFilename(self,fname):
-        '''
+        """
         seis_model.netcdf4.parseInterpFilename(fname)
 
         parses the filename of an interpolated file and returns the interpolation
         settings
 
-        Parameters:
+        Parameters
         -----------
         fname  the filename to parse
 
-        Output:
+        Returns
         -------
         interp_settings  dict with interpolation settings
 
-        '''
+        """
         basename=os.path.splitext(os.path.basename(fname))[0]
         settings=basename.split('_')
         setfields=['model','field','max_distance','res_x','res_y','res_z']
         return dict(zip(setfields,settings))
 
     def loadInterpolated(self,field='dvs',**kwargs):
-        '''
+        """
         seis_model.netcdf.loadInterpolated()
 
         loads interpolated model file data. Will generate interpolated data if
         it does not exist (unless kwarg generate=False)
 
-        Parameters:
+        Parameters
         ----------
         field   the field to load/interpolate, string
         **kwargs
             the kwargs for for interp2cart: res, input_units, max_dist
             generate    if True, will build the interpolation and save it if not found.
 
-        Output:
+        Returns
         ------
         adds an 'interp' attribute to netcdf:
         netcdf.interp['grid']={'x':X,'y':Y,'z':Z}   dict of x,y,z 1D arrays (not meshgrid)
         netcdf.interp['data'][field]             3D np array of shape (Nx,Ny,Nz)
                                                  for each field in fields
 
-        '''
+        """
 
         res=kwargs.get('res',[10,10,10])
         input_units=kwargs.get('input_units','km')
@@ -644,21 +650,232 @@ class netcdf(object):
 
         return
 
+    def check_dvs(self,ref_model='h_average'):
+        """
+        seis_model.netcdf.check_dvs()
+
+        checks for shear wave velocity perturbation, calcuates it if not there.
+
+        Parameters
+        -----------
+        ref_type    the reference model type to use in calculating perturbations:
+                    'h_average'     ref model is horizontal average of current
+                                    model at every depth
+                    'ref_model':    will use a 1D reference model. If the data
+                                    has 'vsh' and 'vsv' fields, will compare
+                                    voigt average to AK135F_AVG. If not, will
+                                    compare 'vsv' or 'vsh' to PREM.
+
+        Returns
+        -------
+        dvs         the shear wave velocity perturbation:
+                        (v_model - v_ref)/v_ref
+
+        """
+
+        if 'dvs' in self.fields:
+            return self.returnFilled_np('dvs',np.nan)
+        else:
+            print("seis_model.netcdf: no dvs field, attempting to calculate it.")
+            return self.calc_dvs()
+
+    def calc_dvs(self,ref_model='1d_ref'):
+        """ calculates shear wave velocity perturbations from a reference model
+
+        Parameters
+        ----------
+        ref_model : str
+            ref_model type, 'h_average' or '1d_ref' (the default is 'h_average')
+
+            'h_average'     ref model is horizontal average of current model at
+                            every depth
+            '1d_ref':       will use a 1D reference model. If the data has 'vsh'
+                            and 'vsv' fields, will compare voigt average to
+                            AK135F_AVG. If not, will compare 'vsv' or 'vsh' to
+                            PREM.
+
+        Returns
+        -------
+        ndarray
+            velocity perturbation on model grid.
+
+        """
+
+        v=None
+        if 'vsv' in self.fields and 'vsh' in self.fields:
+            vsv=self.returnFilled_np('vsv',np.nan)
+            vsh=self.returnFilled_np('vsh',np.nan)
+            v=simpleVoigt(vsv,vsh)
+            ref_type='voigt'
+        elif 'vsv' in self.fields:
+            v=self.returnFilled_np('vsv',np.nan)
+            ref_type='vsv'
+        elif 'vsh' in self.fields:
+            v=self.returnFilled_np('vsh',np.nan)
+            ref_type='vsh'
+
+        if v is not None:
+            if ref_model == 'h_average':
+                v_ave=np.nanmean(v,axis=1)
+                v_ave=np.nanmean(v_ave,axis=1)[:,np.newaxis,np.newaxis]
+            elif ref_model=='1d_ref':
+                # interpolate a reference model at the depths of the present
+                # model to get average velocity vs depth
+                if ref_type=='voigt':
+                    ref_m=refModel('AK135F_AVG')
+                    v_func=ref_m.interp('Vs_kms')
+                elif ref_type=='vsv':
+                    ref_m=refModel('PREM500')
+                    v_func=ref_m.interp('Vsv_kms')
+                elif ref_type=='vsh':
+                    ref_m=refModel('PREM500')
+                    v_func=ref_m.interp('Vsh_kms')
+                model_depths=np.array(self.data.variables['depth'][:])
+                v_ave=v_func(model_depths)[:,np.newaxis,np.newaxis]
+
+            v_ave[v_ave<1e-8]=np.min(v_ave[v_ave>1e-8]) # interp close to surf can give 0
+            return (v - v_ave)/(v_ave)
+        else:
+            return np.array([])
+
+    def returnFilled_np(self,field,fillval=None):
+        """
+        seis_model.netcdf.returnFilled_np(field,fillval=np.nan)
+
+        returns a copy of variable data as a numpy array
+
+        Parameters
+        ----------
+        field :
+            the field to return
+        fillval :
+            optional fill value to use. If None, will return the default fill
+            value of the netcdf variable
+
+        Returns
+        -------
+        npRA : ndarray
+            array of desired field
+
+        """
+        npRA=np.array(self.data.variables[field][:])
+        if fillval is not None:
+            npRA[self.data.variables[field][:].mask]=fillval
+
+        return npRA
+
+class refModel(object):
+    """
+    seis_model.refModel() IRIS refence model reader for plaintext csv files.
+
+    m = seis_model.refModel(ref_model)
+
+    Parameters
+    ----------
+    ref_model  the reference model: can be a file path or just a filename if
+               the model resides in the yt_velmodel_vis filesystem database
+    """
+    def __init__(self,ref_model):
+
+        self.db=dm.filesysDB()
+
+        if os.path.isfile(ref_model):
+            filename=ref_model
+        else:
+            filename=self.db.validateFile(ref_model)
+            if filename is False:
+                filename=self.db.validateFile(ref_model+'.csv')
+                if filename is False:
+                   raise ValueError('Could not find reference model '+fname)
+
+        self.model_file=filename
+        self.df=None
+        return
+
+    def return_df(self,column_list=None,**kwargs):
+        """
+        seis_model.refModel.return_df(column_list=None,**kwargs)
+
+        returns reference model as pandas dataframe
+
+        Parameters
+        -----------
+        column_list     list of columns to return. If None, returns all
+        kwargs          keyword dict, passed to pandas.read_csv()
+        """
+
+        df=self.df
+        if df is None:
+            df=pd.read_csv(self.model_file,**kwargs)
+
+        if column_list is None:
+            column_list=df.columns
+        return df[column_list]
+
+    def interp(self,column,**kwargs):
+        """
+        seis_model.refModel.interp(column)
+
+        returns a scipy.interpolate.interp1d function for the depth dependence
+        of specified column
+
+        Parameters
+        -----------
+        column  the column to build interpolation function for
+        kwargs  keyword dict, passed to pandas.read_csv()
+
+        Returns
+        ------
+        interp  the interpolation function
+
+        Example:
+        --------
+        To calculate Vp at 100 and 200 km:
+            Vp_vs_depth = seis_model.refModel.interp('Vp_kms')
+            Vp=Vp_vs_depth(np.array([100,200]))
+        """
+        df=self.df
+        if df is None:
+            df=pd.read_csv(self.model_file,**kwargs)
+
+        return interp1d(df['depth_km'],df[column])
+
+def simpleVoigt(vsh,vsv):
+    """
+    seis_model.simpleVoigt(vsh,vsv)
+    voigt average of horizontal and vertical shear wave velocities
+
+        v = 0.5 * (vsh + vsv)
+
+    Parameters
+    -----------
+    vsh     horizontal shear wave velocity, array or scalar
+    vsv     vertical shear wave velocity, array or scalar
+
+    if vsh and vsv are both arrays, must be the same size
+
+    Returns
+    -------
+    v       voigt average
+
+    """
+    return (vsh+vsv)*0.5
+
+
 def in_convexHull(testPoints, hullPoints):
     """
-    in_convexHull()
+    seis_model.in_convexHull()
 
     checks if testPoints fall within convex hull defined by points in hullPoints
-    Test if points in `p` are in `hull`
 
-    Parameters:
+    Parameters
     ----------
     testPoints  array of coordinates to check: N x n_dim, N is number of points
                 to check, n_dim is number of dimensions
     hullPoints  coordinates defining the convex hull: M x n_dim, M is number of
                 points on the hull, n_dim is number of dimensions.
 
-    Output:
+    Returns
     -------
     in_hull    boolean array of length N
 
