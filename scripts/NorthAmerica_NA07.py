@@ -94,10 +94,20 @@ shp_bbox=[lon_rnge[0],lat_rnge[0],lon_rnge[1],lat_rnge[1]]
 volcs=sp.shapedata('global_volcanos',radius=R*1000.,buildTraces=False)
 sc=volcs.buildTraces(RGBa=[0.,0.8,0.,0.05],bbox=shp_bbox,sc=sc)
 
-print("adding state bounds")
-continents=sp.shapedata('us_states',bbox=shp_bbox,radius=R*1000.)
-sc=continents.addToScene(sc)
+# print("adding political bounds")
+for shpfi in ['ne_50m_admin_1_states_provinces']:
+    thisshp=sp.shapedata(shpfi,bbox=shp_bbox,radius=R*1000.)
+    sc=thisshp.addToScene(sc)
 
+# continents=sp.shapedata('ne_110m_admin_1_states_provinces',bbox=shp_bbox,radius=R*1000.)
+# sc=continents.addToScene(sc)
+# continents=sp.shapedata('ne_110m_admin_0_countries',bbox=shp_bbox,radius=R*1000.)
+# sc=continents.addToScene(sc)
+
+continents=sp.shapedata('ne_110m_coastline',bbox=shp_bbox,radius=R*1000.)
+sc=continents.addToScene(sc)
+# continents=sp.shapedata('ne_110m_rivers_lake_centerlines',bbox=shp_bbox,radius=R*1000.)
+# sc=continents.addToScene(sc)
 print('adding plate boundaries')
 clrs={
     'transform':[0.8,0.,0.8,0.05],
