@@ -9,15 +9,21 @@ import matplotlib.pyplot as plt
 # setup
 fname='US.2016.nc' # model selection
 settings = {
-    'interp':{'field':'dvs','max_dist':50000,'res':[10000,10000,10000],
-              'input_units':'m','interpChunk':int(1e7)},
-    'bbox_on_load':None,
+    'interp':{'field':'dvs','max_dist':100000,'res':[10000,10000,10000],
+              'input_units':'m','interpChunk':int(1e7)},    
     'tfs':[
-          {'tftype':'step','values':(-.5, -.1, [1.0, 0., 0., .8])},
-          {'tftype':'step','values':(-.1, -.001, [1.0, 0., 0., .5])},
-          {'tftype':'step','values':(0.0001, 0.5, [0.5, 1., .5, .6])}
+            {'tftype':'step','values':(-40, -4, [1.0, 0., 0., .8])},
+            {'tftype':'step','values':(-4, -2, [1.0, 0., 0., .8])},
+            {'tftype':'step','values':(-2, -1.5, [1.0, 0., 0., .8])},
+            {'tftype':'step','values':(-1.5, -.5, [1.0, 0., 0., .8])},
+            {'tftype':'step','values':(-.5, -.0000001, [1.0, 0., 0., .8])},
+            {'tftype':'step','values':(0.0001, 0.5, [0,0,1.0, .5])},
+            {'tftype':'step','values':(0.5, 1., [0,0,1.0, .6])},
+            {'tftype':'step','values':(1., 2., [0,0,1.0, .7])},
+            {'tftype':'step','values':(2., 3., [0,0,1.0, .8])},
+            {'tftype':'step','values':(4., 20., [0,0,1.0, .9])}
         ],
-    'tf_bounds':[-1.,1.],
+    'tf_bounds':[-40.,20.],
     'res_factor':1.,
     'sigma_clip':1
 }
@@ -29,6 +35,33 @@ model=sm.netcdf(fname,settings['interp'])
 shortname=fname.split('.')[0]
 datafld=settings['interp']['field']
 data={datafld:model.interp['data'][datafld]} # dict container for yt scene
+
+if datafld=='dvs':
+    rawdata=model.check_dvs()
+else:
+    rawdata=model.returnFilled_np(rawdata,np.nan)
+
+# make some plots
+
+xlon=model.data.variables['longitude'][:]
+ylat=model.data.variables['latitude'][:]
+depth=model.data.variables['depth'][:]
+vsv=model.data.variables['vsv'][:]
+target_depth=50
+idepth=np.where(abs(depth-target_depth)==np.min(abs(depth-target_depth)));
+idepth=idepth[0][0]
+plt.subplot(2,1,1)
+plt.pcolormesh(xlon,ylat,vsv[100,:,:])
+plt.title(str(depth[idepth])+ ' km, abs. vsv velocity')
+plt.colorbar()
+plt.subplot(2,1,2)
+plt.pcolormesh(xlon,ylat,rawdata[100,:,:])
+plt.colorbar()
+plt.title(str(depth[idepth])+ ' km, dvs')
+plt.savefig(os.path.join(out_dir,'depth_slice.png'))
+plt.close('all')
+
+
 
 # add the transfer functions
 bnds=settings.get('tf_bounds', [-5,5])
@@ -48,6 +81,7 @@ colors = np.array([tf.funcs[0].y, tf.funcs[1].y, tf.funcs[2].y,
                    tf.funcs[3].y]).T
 fig = plt.figure(figsize=[6, 3])
 ax = fig.add_axes([0.2, 0.2, 0.75, 0.75])
+d_hist1=ax.hist(rawdata[~np.isnan(rawdata)].ravel(),bins=100,density=True,log=False)
 d_hist=ax.hist(data[datafld][~np.isnan(data[datafld])].ravel(),bins=100,density=True,log=False)
 ax.bar(x, tf.funcs[3].y, w, edgecolor=[0.0, 0.0, 0.0, 0.0],
        log=False, color=colors, bottom=[0])

@@ -521,7 +521,7 @@ class netcdf(object):
                 i_1=i_0+chunk
                 if i_1>N_grid:
                     i_1=N_grid
-                pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))                
+                pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))
                 indxs=np.array(range(i_0,i_1)) # the linear indeces of this chunk
                 for fi in fields:
                     (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)
@@ -696,7 +696,7 @@ class netcdf(object):
         Returns
         -------
         dvs : ndarray
-            the shear wave velocity perturbation,(v_model - v_ref)/v_ref
+            the shear wave velocity perturbation,(v_model - v_ref)/v_ref*100
 
         """
 
@@ -725,7 +725,7 @@ class netcdf(object):
         Returns
         -------
         ndarray
-            velocity perturbation on model grid.
+            velocity perturbation on model grid in percent.
 
         """
 
@@ -762,7 +762,7 @@ class netcdf(object):
                 v_ave=v_func(model_depths)[:,np.newaxis,np.newaxis]
 
             v_ave[v_ave<1e-8]=np.min(v_ave[v_ave>1e-8]) # interp close to surf can give 0
-            return (v - v_ave)/(v_ave)
+            return (v - v_ave)/(v_ave)*100
         else:
             return np.array([])
 
