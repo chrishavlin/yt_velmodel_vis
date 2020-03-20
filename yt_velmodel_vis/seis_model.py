@@ -100,15 +100,16 @@ class netcdf(object):
 
         Parameters
         ----------
-        fname if None (default), will check attributes for fname
+        fname : str
+            filename to load, if None (default), will check attributes for fname
 
         Returns
         -------
         Loads netcdf dataset into self.data. Other useful attributes are:
-        variables: list of variables, list of str
-        coords: list of coordinates, list of str
-        ndim: number of dimensions, integer
-        varshape: the shape of the variables, tuple of len 3
+            variables: list of variables, list of str
+            coords: list of coordinates, list of str
+            ndim: number of dimensions, integer
+            varshape: the shape of the variables, tuple of len 3
         """
         if fname is None:
             try:
@@ -124,12 +125,7 @@ class netcdf(object):
         return
 
     def setUsefulInfo(self):
-        """
-        setUsefulInfo()
-
-        copies netcdf characteristics to attributes for easy access
-
-        """
+        """ copies netcdf characteristics to attributes for easy access """
 
         self.coords={}
         for key, value in self.data.dimensions.items():
@@ -152,21 +148,23 @@ class netcdf(object):
 
         Parameters
         ----------
-        method  the method to use:
-                'geo2spherical': converts lat/lon/radius to spherical coordinates
-                                 conventions used by yt (i.e., N. pole is 0, not +90)
-                'sphere2cart': conerts spherical coordinates to cartesian
-                               coordinates.
+        method : str
+            the method to use, must be:
+
+            'geo2spherical': converts lat/lon/radius to spherical coordinates
+                             conventions used by yt (i.e., N. pole is 0, not +90)
+            'sphere2cart': conerts spherical coordinates to cartesian
+                           coordinates.
 
         Returns
         ------
-        sets attributes depending on method.
+        Sets attributes depending on method.
         For geo2spherical, sets:
-            netcdf.spherical    a dictionary with coordinate arrays and bounding
-                                box info
+            netcdf.spherical :
+                a dictionary with coordinate arrays and bounding box info
         For sphere2cart, sets:
-            netcdf.spherical    a dictionary with coordinate arrays and bounding
-                                box info
+            netcdf.cart :
+                a dictionary with coordinate arrays and bounding box info
         """
 
         if method=='geo2spherical':
@@ -243,8 +241,7 @@ class netcdf(object):
         return
 
     def moveToUnstructured(self,fields=[],coordfields=[]):
-        """
-        moves regular geo-spherical mesh to unstructured mesh in x,y,z
+        """ moves regular geo-spherical mesh to unstructured mesh in x,y,z
 
         (x,y,z)=(0,0,0) is planet center
 
@@ -331,19 +328,22 @@ class netcdf(object):
         return
 
     def checkDomain(self,xdata,ydata,zdata):
-        """
-        checkDomain()
+        """ checks if cartesian coordinates fall within spherical domain
 
-        checks if cartesian coordinates fall within the original domain using
-        in_convexHull. Generally not worth the overhead.
+        Builds a convex hull of the original spherical domain and checks if the
+        supplied coordinates fall within the domain.
+
+        Generally not worth the overhead.
 
         Parameters
         -----------
-        xdata,ydata,zdata:   1-D arrays of length N where N is number of points
+        xdata,ydata,zdata:  ndarrays
+            1-D arrays of length N where N is number of points
 
         Returns
         -------
-        in_hull:             1-D boolean of length N, True if in domain.
+        in_hull: ndarray
+            1-D boolean array of length N, True if in domain.
         """
 
         # build hull framework from lat/lon/depth extents
@@ -393,23 +393,31 @@ class netcdf(object):
         seis_model.netcdf4.interp2cartesian()
 
         moves geo-spherical data (radius/depth, lat, lon) to earth-centered
-            cartesian coordinates using a kdtree
+        cartesian coordinates using a kdtree
 
         Parameters
         ----------
-        fields          the fields to interpolate to the grid
-        res             list of resolution in x,y,z
-        input_units     the units of res (final coord system will be in these units)
-        max_dist        the max distance away for nearest neighbor search
-        store_trees     if True, will store the kdtree(s) generated
-        interpChunk     the chunk size for querying the kdtree.
+        fields : list of str
+            the fields to interpolate to the grid (default [])
+        res: list of int
+            list of resolution in x,y,z (default [10,10,10])
+        input_units : str
+            the units of res and max_dist (default 'km'). The final coord system
+            will be in these units.
+        max_dist : int or float
+            the max distance away for nearest neighbor search (default 100)
+        store_trees : boolean
+            if True, will store the kdtree(s) generated (default False)
+        interpChunk : int
+            the chunk size for querying the kdtree (default 500000)
 
         Returns
-        ------
+        -------
         adds an 'interp' attribute to netcdf:
-        netcdf.interp['grid']={'x':X,'y':Y,'z':Z}   dict of x,y,z 1D arrays (not meshgrid)
-        netcdf.interp['data'][field]             3D np array of shape (Nx,Ny,Nz)
-                                                 for each field in fields
+        netcdf.interp['grid'] : dict of ndarrays
+            {'x':X,'y':Y,'z':Z}, dict of x,y,z 1D arrays (not meshgrid)
+        netcdf.interp['data'][field] : ndarray
+            3D np array of shape (Nx,Ny,Nz) for each field in fields
         """
 
         self.interp={}
@@ -463,8 +471,15 @@ class netcdf(object):
             for fi in fields:
                 # build kdtree of non-null data for each variable
                 # (might not be OK to assume same location for non-null in each field)
-                fillval=getattr(self.data.variables[fi],'missing_value',np.nan)
-                data=self.data.variables[fi][:].data.ravel()
+
+                if fi == 'dvs':
+                    data=self.check_dvs()
+                    data=data.ravel()
+                    fillval=np.nan
+                else:
+                    fillval=getattr(self.data.variables[fi],'missing_value',np.nan)
+                    data=self.data.variables[fi][:].data.ravel()
+
                 x_fi=xdata[data!=fillval]
                 y_fi=ydata[data!=fillval]
                 z_fi=zdata[data!=fillval]
@@ -506,8 +521,7 @@ class netcdf(object):
                 i_1=i_0+chunk
                 if i_1>N_grid:
                     i_1=N_grid
-                pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))
-
+                pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))                
                 indxs=np.array(range(i_0,i_1)) # the linear indeces of this chunk
                 for fi in fields:
                     (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)
@@ -543,7 +557,7 @@ class netcdf(object):
 
         return
 
-    def interpFilename(self,field,res=[10,10,10], max_dist=100):
+    def interpFilename(self,field,res,max_dist):
         """
         seis_model.netcdf4.interpFilename(field,res,max_dist)
 
@@ -551,14 +565,18 @@ class netcdf(object):
 
         Parameters
         ----------
-        field   the data field
-        res     resolution list
-        mx_dist max distance for NN search
+        field : str
+            the data field (e.g., 'dvs')
+        res : list of int or float
+            resolution list (e.g., [10,10,10])
+        mx_dist : int or float
+            max distance for NN search (e.g., 100)
 
         Returns
         ------
-        fname       the full path filename of the interpolated file, whether
-                    or not it exists
+        fname : str
+            the full path filename of the interpolated file. Does not check
+            that the file exists
         """
 
         db_dir=os.path.join(self.db.db_path,'interpolated_models')
@@ -578,11 +596,13 @@ class netcdf(object):
 
         Parameters
         -----------
-        fname  the filename to parse
+        fname : str
+            the filename to parse
 
         Returns
         -------
-        interp_settings  dict with interpolation settings
+        interp_settings : dict
+            dict with interpolation settings
 
         """
         basename=os.path.splitext(os.path.basename(fname))[0]
@@ -599,17 +619,22 @@ class netcdf(object):
 
         Parameters
         ----------
-        field   the field to load/interpolate, string
-        **kwargs
-            the kwargs for for interp2cart: res, input_units, max_dist
-            generate    if True, will build the interpolation and save it if not found.
+        field : str
+            the field to load/interpolate (default 'dvs')
+        **kwargs : dict
+            can include:
+                - the kwargs for for interp2cart: res, input_units, max_dist
+                - kwargs['generate'] : boolean
+                    if True, will build the interpolation and save it if not
+                    found.
 
         Returns
         ------
         adds an 'interp' attribute to netcdf:
-        netcdf.interp['grid']={'x':X,'y':Y,'z':Z}   dict of x,y,z 1D arrays (not meshgrid)
-        netcdf.interp['data'][field]             3D np array of shape (Nx,Ny,Nz)
-                                                 for each field in fields
+        netcdf.interp['grid'] : dict of ndarrays
+            {'x':X,'y':Y,'z':Z} dict of x,y,z 1D arrays (not meshgrid)
+        netcdf.interp['data'][field] : ndarray
+            3D np array of shape (Nx,Ny,Nz) for each field in fields
 
         """
 
@@ -618,7 +643,7 @@ class netcdf(object):
         max_dist=kwargs.get('max_dist',100)
         chunk=kwargs.get('interpChunk',500000)
 
-        fname=self.interpFilename(field,res=res,max_dist=max_dist)
+        fname=self.interpFilename(field,res,max_dist)
         if os.path.isfile(fname):
             # load it
             if ~hasattr(self,'interp'):
@@ -650,7 +675,7 @@ class netcdf(object):
 
         return
 
-    def check_dvs(self,ref_model='h_average'):
+    def check_dvs(self,ref_model='ref_model'):
         """
         seis_model.netcdf.check_dvs()
 
@@ -658,25 +683,28 @@ class netcdf(object):
 
         Parameters
         -----------
-        ref_type    the reference model type to use in calculating perturbations:
-                    'h_average'     ref model is horizontal average of current
-                                    model at every depth
-                    'ref_model':    will use a 1D reference model. If the data
-                                    has 'vsh' and 'vsv' fields, will compare
-                                    voigt average to AK135F_AVG. If not, will
-                                    compare 'vsv' or 'vsh' to PREM.
+        ref_type : str
+            the reference model type to use in calculating perturbations:
+
+            'h_average'     ref model is horizontal average of current model at
+                            every depth
+            'ref_model':    will use a 1D reference model. If the data has 'vsh'
+                            and 'vsv' fields, will compare voigt average to
+                            AK135F_AVG. If not, will compare 'vsv' or 'vsh' to
+                            PREM. (default)
 
         Returns
         -------
-        dvs         the shear wave velocity perturbation:
-                        (v_model - v_ref)/v_ref
+        dvs : ndarray
+            the shear wave velocity perturbation,(v_model - v_ref)/v_ref
 
         """
 
         if 'dvs' in self.fields:
             return self.returnFilled_np('dvs',np.nan)
         else:
-            print("seis_model.netcdf: no dvs field, attempting to calculate it.")
+            print(("seis_model.netcdf.check_dvs: no dvs field, attempting to "
+                    "calculate it."))
             return self.calc_dvs()
 
     def calc_dvs(self,ref_model='1d_ref'):
@@ -842,7 +870,7 @@ class refModel(object):
             df=pd.read_csv(self.model_file,**kwargs)
 
         # deal with discontinuities: pull columns, ensure depth is increasing
-        col_v=df[column].to_numpy()        
+        col_v=df[column].to_numpy()
         depths=df['depth_km'].to_numpy()
         sorted_i=np.argsort(depths)
         depths=depths[sorted_i]
