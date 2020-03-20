@@ -22,23 +22,51 @@ def sphere2cart(phi,theta,radius):
 
     Parameters
     ----------
-    phi : ndarray or scalar float/ing
+    phi : ndarray or scalar float/int
         angle from north in radians (0 = north pole)
-    theta : ndarray or scalar float/ing
+    theta : ndarray or scalar float/int
         longitudinal angle in radians
-    radius : ndarray or scalar float/ing
+    radius : ndarray or scalar float/int
         radius in any units
 
     all arrays must be the same size (or 2 of 3 can be scalars)
 
     Returns
     -------
-    (x,y,z) : tuple of cartesian x,y,z in same units as radius
+    tuple
+        (x,y,z) : tuple of cartesian ndarrays x,y,z in same units as radius
     """
     x=radius * np.sin(phi) * np.sin(theta)
     y=radius * np.sin(phi) * np.cos(theta)
     z=radius * np.cos(phi)
     return (x,y,z)
+
+def geosphere2cart(lat,lon,radius):
+    """converts lat,lon,radius to spherical coord conventions of yt
+
+    Parameters
+    ----------
+    lat : ndarray or scalar float/int
+        latitude, degrees
+    lon : ndarray or scalar float/int
+        longitude, degrees
+    radius : ndarray or scalar float/int
+        radius in any units
+
+    all arrays must be the same size (or 2 of 3 can be scalars)
+
+    Returns
+    -------
+    tuple
+        (x,y,z) : tuple of cartesian ndarrays x,y,z in same units as radius
+
+    """
+
+    # geo-sperhical to yt spherical
+    phi = ( 90. - lat ) * np.pi / 180.
+    lon[lon<0.0]=lon[lon<0.0]+360.
+    theta = lon * np.pi / 180.
+    return sphere2cart(phi,theta,radius)
 
 def cart2sphere(x,y,z,geo=True):
     """
@@ -213,16 +241,8 @@ class netcdf(object):
             crds={}
             for idim in range(0,3):
                 crds[ordr[idim]]=newdims[idim]
-            crds['lat']=crds['latitude']
-            crds['lon']=crds['longitude']
+            X,Y,Z=geosphere2cart(crds['latitude'],crds['longitude'],(6371.-crds['depth'])*1000.)
 
-            # assume lat/lon points lie on perfect sphere
-            crds['depth'] =6371. - crds['depth'] # depth is now Radius
-            crds['lat'] = ( 90. - crds['lat'] ) * np.pi / 180. # lat is now deg from North
-            crds['lon'][crds['lon']<0.0]=crds['lon'][crds['lon']<0.0]+360.
-            crds['lon'] = crds['lon'] * np.pi / 180.
-
-            X,Y,Z=sphere2cart(crds['lat'],crds['lon'],crds['depth']*1000.)
             self.cart={'X':X,'Y':Y,'Z':Z}
 
             self.cart['bounds']={}
@@ -610,7 +630,7 @@ class netcdf(object):
         setfields=['model','field','max_distance','res_x','res_y','res_z']
         return dict(zip(setfields,settings))
 
-    def loadInterpolated(self,field='dvs',**kwargs):
+    def loadInterpolated(self,field='dvs',bbox={},**kwargs):
         """
         seis_model.netcdf.loadInterpolated()
 
@@ -621,6 +641,11 @@ class netcdf(object):
         ----------
         field : str
             the field to load/interpolate (default 'dvs')
+        bbox : dict
+            bounding box dictionary. key-list pairs with keys that match the
+            dimensional variable fieldnames:
+            bbox = {'latitude':[42,50], 'longitude':[200,225]}
+            if not supplied, the full data range is used.
         **kwargs : dict
             can include:
                 - the kwargs for for interp2cart: res, input_units, max_dist
@@ -673,7 +698,99 @@ class netcdf(object):
                 for dim in ['x','y','z']:
                     hf.create_dataset(dim,  data=self.interp['grid'][dim],compression='gzip')
 
+        if hasattr(self,'interp'):
+            # add on bounding box information and limit the data ranges if
+            # the user supplied a bounding box
+
+            # get the data ranges
+            data_rngs={}
+            for dim in self.data.dimensions.keys():
+                if dim in bbox.keys():
+                    data_rngs[dim]=bbox[dim]
+                else:
+                    data_rngs[dim]=[
+                        self.data.variables[dim][:].min(),
+                        self.data.variables[dim][:].max()
+                    ]
+            self.interp['bbox']={'spherical':data_rngs}
+
+            if len(bbox)>0:
+                # limit data ranges by bounding box 
+                self.interp['bbox']['cart']=self.calcCartesianBbox(data_rngs)
+
+                msks=[]
+                for dim in ['x','y','z']:
+                    rnge=self.interp['bbox']['cart'][dim]
+                    msk=np.array(self.interp['grid'][dim] >= rnge[0])
+                    msk=msk * (self.interp['grid'][dim] <= rnge[1])
+                    inds=list(np.where(msk))
+                    msks.append([inds[0][0],inds[0][-1]])
+                    self.interp['grid'][dim]=self.interp['grid'][dim][inds[0][0]:inds[0][-1]]
+
+
+                def limByMsks(var,msks):
+                    var=var[msks[0][0]:msks[0][1],msks[1][0]:msks[1][1],msks[2][0]:msks[2][1]]
+                    return var
+                self.interp['data'][field]=limByMsks(self.interp['data'][field],msks)
+                self.interp['bbox']['cart']=list(self.interp['bbox']['cart'].values())
+            else:
+                self.interp['bbox']['cart']=self.cart['bbox']
+
+
         return
+
+    def calcCartesianBbox(self,data_rngs,return_dict=True):
+        """ calculates the cartesian bounding box for a subset of geometry
+
+        Parameters
+        ----------
+        data_rngs : dict
+            dictionary of lists with a key for each spatial dimension
+            data_rngs={'depth':[0,200],'latitude':[30,40],'longitude':[120,134]}
+
+        return_dict : boolean
+            if True, will return a dictionary keyed by dimension.
+            if False, will return list of data ranges
+
+        Returns
+        -------
+        dict
+            dict of min/max values for cartesian coordinates.
+
+            if return_dict:
+                {'x':[min X, max X],'y':[min Y, max Y],'z':[min Z, max Z]}
+            else:
+                [[min X, max X],[min Y, max Y],[min Z, max Z]]
+        """
+
+        # check that data_rngs has keys for each dim
+        for dim in self.data.dimensions.keys():
+            if dim not in data_rngs.keys():
+                msg="all dims must be in `data_rngs`, missing "+dim
+                raise ValueError(msg)
+
+        # build a meshgrid of the dimension bounding points
+        var=list(self.varinfo.keys())[0]
+        ordr=self.data.variables[var].dimensions
+        newdims=np.meshgrid(np.array(data_rngs[ordr[0]]),
+                            np.array(data_rngs[ordr[1]]),
+                            np.array(data_rngs[ordr[2]]),
+                            indexing='ij')
+
+        # convert to geo-spherical
+        crds={}
+        for idim in range(0,3):
+            crds[ordr[idim]]=newdims[idim]
+        X,Y,Z=geosphere2cart(crds['latitude'],crds['longitude'],(6371.-crds['depth'])*1000.)
+
+        cartBox={
+            'x':[X.min(),X.max()],'y':[Y.min(),Y.max()],'z':[Z.min(),Z.max()]
+        }
+
+        if return_dict:
+            return cartBox
+        else:
+            return list(cartBox.values())
 
     def check_dvs(self,ref_model='ref_model'):
         """

@@ -9,21 +9,19 @@ import matplotlib.pyplot as plt
 # setup
 fname='US.2016.nc' # model selection
 settings = {
-    'interp':{'field':'dvs','max_dist':100000,'res':[10000,10000,10000],
-              'input_units':'m','interpChunk':int(1e7)},    
+    'interp':{'field':'dvs','max_dist':100000,'res':[5000,5000,5000],
+              'input_units':'m','interpChunk':int(1e7),
+              'bbox':{'latitude':[32,42],'longitude':[244,258]}
+              },
     'tfs':[
-            {'tftype':'step','values':(-40, -4, [1.0, 0., 0., .8])},
-            {'tftype':'step','values':(-4, -2, [1.0, 0., 0., .8])},
+            {'tftype':'step','values':(-60, -4, [1.0, 0., 0., .3])},
+            {'tftype':'step','values':(-4, -2, [1.0, 0., 0., .3])},
             {'tftype':'step','values':(-2, -1.5, [1.0, 0., 0., .8])},
             {'tftype':'step','values':(-1.5, -.5, [1.0, 0., 0., .8])},
             {'tftype':'step','values':(-.5, -.0000001, [1.0, 0., 0., .8])},
-            {'tftype':'step','values':(0.0001, 0.5, [0,0,1.0, .5])},
-            {'tftype':'step','values':(0.5, 1., [0,0,1.0, .6])},
-            {'tftype':'step','values':(1., 2., [0,0,1.0, .7])},
-            {'tftype':'step','values':(2., 3., [0,0,1.0, .8])},
-            {'tftype':'step','values':(4., 20., [0,0,1.0, .9])}
+            {'tftype':'step','values':(0.0001, 20, [0,0,1.0, .2])}
         ],
-    'tf_bounds':[-40.,20.],
+    'tf_bounds':[-60.,20.],
     'res_factor':1.,
     'sigma_clip':1
 }
@@ -58,6 +56,8 @@ plt.subplot(2,1,2)
 plt.pcolormesh(xlon,ylat,rawdata[100,:,:])
 plt.colorbar()
 plt.title(str(depth[idepth])+ ' km, dvs')
+plt.xlim(model.interp['bbox']['spherical']['longitude'])
+plt.ylim(model.interp['bbox']['spherical']['latitude'])
 plt.savefig(os.path.join(out_dir,'depth_slice.png'))
 plt.close('all')
 
@@ -81,10 +81,10 @@ colors = np.array([tf.funcs[0].y, tf.funcs[1].y, tf.funcs[2].y,
                    tf.funcs[3].y]).T
 fig = plt.figure(figsize=[6, 3])
 ax = fig.add_axes([0.2, 0.2, 0.75, 0.75])
-d_hist1=ax.hist(rawdata[~np.isnan(rawdata)].ravel(),bins=100,density=True,log=False)
+# d_hist1=ax.hist(rawdata[~np.isnan(rawdata)].ravel(),bins=100,density=True,log=False)
 d_hist=ax.hist(data[datafld][~np.isnan(data[datafld])].ravel(),bins=100,density=True,log=False)
-ax.bar(x, tf.funcs[3].y, w, edgecolor=[0.0, 0.0, 0.0, 0.0],
-       log=False, color=colors, bottom=[0])
+# ax.bar(x, tf.funcs[3].y, w, edgecolor=[0.0, 0.0, 0.0, 0.0],
+#        log=False, color=colors, bottom=[0])
 
 if os.path.exists(out_dir) is False:
     os.mkdir(out_dir)
@@ -93,17 +93,18 @@ plt.savefig(os.path.join(out_dir,'transfer_function.png'))
 
 # load the data as a uniform grid, create the 3d scene
 sc_mult=1.0 # scale multiplier
-bbox = model.cart['bbox'] # list-like [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
+bbox = np.array(model.interp['bbox']['cart']) # list-like [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
 ds = yt.load_uniform_grid(data,data[datafld].shape,sc_mult,bbox=bbox,nprocs=1,
                         periodicity=(True,True,True),unit_system="mks")
 
 sc = yt.create_scene(ds,datafld)
 
 # Draw the domain boundary and useful grids
-lat_rnge=[np.min(model.data.variables['latitude']),np.max(model.data.variables['latitude'])]
-lon_rnge=[np.min(model.data.variables['longitude']),np.max(model.data.variables['longitude'])]
+print(model.interp['bbox'])
+lat_rnge=model.interp['bbox']['spherical']['latitude']
+lon_rnge=model.interp['bbox']['spherical']['longitude']
 min_dep=0.
-max_dep=1200.
+max_dep=150.
 R=6371.
 r_rnge=[(R-max_dep)*1000.,(R-min_dep)*1000.]
 Chunk=sp.sphericalChunk(lat_rnge,lon_rnge,r_rnge)
@@ -134,10 +135,12 @@ for bound in ['transform','ridge','trench']:
 
 # some camera settings
 pos=sc.camera.position
-camera_height=.5*6371.*1000# + 1000*1000.
-cam_xyz=sm.sphere2cart(90.-0.,np.mean(lon_rnge),camera_height)
-
-sc.camera.set_position(cam_xyz,north_vector=np.array([0.0, 0.0, 1.0]))
+camera_height=.8*6371.*1000# + 1000*1000.
+cam_xyz=sm.sphere2cart(90.-0.,np.mean(lon_rnge)+10,camera_height)
+Rmax=6371*1000.
+center_vec=np.array([np.mean(bbox[0])/Rmax,np.mean(bbox[1])/Rmax,np.mean(bbox[2])/Rmax])
+N_vec=np.array([0,0,1])
+sc.camera.set_position(cam_xyz,north_vector=N_vec)
 source = sc.sources['source_00']
 source.tfh.set_log(False)
 
@@ -149,7 +152,7 @@ sc.camera.set_resolution(new_res)
 zoom_factor=.7 # < 1 zooms in
 init_width=sc.camera.width
 sc.camera.width = (init_width * zoom_factor)
-# sc.camera.rotate(-5*np.pi/180)
+sc.camera.rotate(-25*np.pi/180)
 
 source.set_transfer_function(tf) # apply the TF and render it
 
