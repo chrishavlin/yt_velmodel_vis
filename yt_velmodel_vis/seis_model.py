@@ -821,12 +821,15 @@ class refModel(object):
 
         Parameters
         -----------
-        column  the column to build interpolation function for
-        kwargs  keyword dict, passed to pandas.read_csv()
+        column : str
+            the column to build interpolation function for
+        kwargs : dict
+            keyword dict, passed to pandas.read_csv()
 
         Returns
         ------
-        interp  the interpolation function
+        interp :
+            the interpolation function
 
         Example:
         --------
@@ -838,7 +841,24 @@ class refModel(object):
         if df is None:
             df=pd.read_csv(self.model_file,**kwargs)
 
-        return interp1d(df['depth_km'],df[column])
+        # deal with discontinuities: pull columns, ensure depth is increasing
+        col_v=df[column].to_numpy()        
+        depths=df['depth_km'].to_numpy()
+        sorted_i=np.argsort(depths)
+        depths=depths[sorted_i]
+        col_v=col_v[sorted_i]
+
+        # offset disc depths by a small number
+        # disc_vals=[]
+        eps_off=1e-8
+        for i_z in range(0,len(depths)):
+            if depths[i_z]==depths[i_z-1]:
+                # disc_vals.append(depths[i_z]) # not used... might be useful
+                depths[i_z]=depths[i_z]+eps_off
+
+        # build and return the interpolation function
+        interp_f=interp1d(depths,col_v)
+        return interp_f
 
 def simpleVoigt(vsh,vsv):
     """
