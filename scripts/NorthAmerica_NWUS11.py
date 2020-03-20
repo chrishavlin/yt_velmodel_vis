@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 fname='NWUS11-S_percent.nc' # model selection
 settings={
     'interp':{'field':'dvs','max_dist':50000,'res':[10000,10000,10000],
-              'interpChunk':int(1e7)},
+              'input_units':'m','interpChunk':int(1e7)},
     'tfs':[
           {'tftype':'step','values':(-3, -2, [1.0, 0., 0., 1.0])},
           {'tftype':'step','values':(-2, -1, [1.0, 0.5, 0., .8])}

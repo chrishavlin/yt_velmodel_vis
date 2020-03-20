@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 fname='NA07_percent.nc' # model selection
 settings = {
     'interp':{'field':'dvs','max_dist':50000,'res':[10000,10000,10000],
-              'interpChunk':int(1e7)},
+              'input_units':'m','interpChunk':int(1e7)},
     'tfs':[
           {'tftype':'step','values':(-5, -.5, [1.0, 0., 0., .5])},
           {'tftype':'step','values':(0.0001, 0.5, [0.5, 1., .5, .6])},
