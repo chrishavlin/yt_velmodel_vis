@@ -14,14 +14,14 @@ default_db_path=os.path.join(os.path.expanduser("~"),'.ytvelmodeldata')
 
 class filesysDB(object):
     def __init__(self,top_level_dir=None):
-        '''
+        """
         simple file system database manager
 
         Parameters
         ----------
         top_level_dir   the top level directory to search for data files. If
                         None, will check for environment variable YTVELMODELDIR
-        '''
+        """
         if top_level_dir is None:
             top_level_dir = os.environ.get('YTVELMODELDIR')
 
@@ -33,7 +33,14 @@ class filesysDB(object):
         return
 
     def buildFileDictionary(self):
-        ''' builds dictionaries of available files '''
+        """builds dictionaries of available files
+
+        Returns
+        -------
+        None
+
+
+        """
         self.FileDict = {}
         self.FilesByDir = {
             'IRIS_models':[],
@@ -51,7 +58,13 @@ class filesysDB(object):
         return
 
     def validateFile(self,fname):
-        ''' checks if file exists, returns the filename if it does, False if not '''
+        """ checks if file exists
+
+        Returns
+        -------
+        str or bool
+            returns the filename if it exists, False if not
+        """
         validFile=False
         if os.path.isfile(fname):
             validFile=fname
@@ -62,7 +75,23 @@ class filesysDB(object):
         return validFile
 
 class initializeDB(filesysDB):
-    """ initializes the filestyem database (cache)"""
+    """initializes the filestyem database (cache)
+
+    builds directory structure and fetches file. Will not fetch files that are
+    already within the directories.
+
+    Parameters
+    ----------
+    **kwargs : keyword dict with following possible parameters
+
+    top_level_dir : str
+        the top level directory of filesystem db cache. If not provided, will
+        check if the YTVELMODELDIR environment variable is set
+
+    build : bool
+        if True (default), will build the db and fetch sample files.
+        
+    """
     def __init__(self,**kwargs):
         lb=os.linesep
         print(lb+"Initializing filesystem data cache...")
@@ -114,7 +143,12 @@ class initializeDB(filesysDB):
                     raise ValueError(msg)
 
     def fetchIRIS(self):
-        ''' fetches a number of models from IRIS '''
+        """fetches some netcdf files from IRIS, saves in local db cache
+
+        Returns
+        -------
+        None
+        """
 
         # IRIS earth models
         url_base='https://ds.iris.edu/files/products/emc/emc-files/'
@@ -183,7 +217,12 @@ class initializeDB(filesysDB):
         return
 
     def cpShp(self):
-        ''' copies shapefile data from package to local db cache '''
+        """copies shapefile data from package to local db cache
+
+        Returns
+        -------
+        None
+        """
         dataDir=datafiles.__path__._path[0]
         shapeDest=os.path.join(self.db_path,'shapedata')
         print(os.linesep+'Copying packaged shapefile data')
@@ -195,7 +234,6 @@ class initializeDB(filesysDB):
                 copy_tree(fullSrc,fullDest,verbose=0)
 
         return
-
 
     def fetchNatEarth(self):
         """attempts to fetch and unpack useful shapefiles from
@@ -238,7 +276,7 @@ class initializeDB(filesysDB):
                     try:
                         urlrequest.urlretrieve(fi, zip_path)
                     except:
-                        msg=('    Could not fetch '+fi)
+                        msg=('    WARNING: Could not fetch '+fi)
                         print(msg)
                     time.sleep(self.url_pause)
                 else:
@@ -251,7 +289,7 @@ class initializeDB(filesysDB):
                     with ZipFile(zip_path, 'r') as zip_ref:
                         zip_ref.extractall(destDir)
                 except:
-                    print('    Could not unpack '+zip_path)
+                    print('    WARNING: Could not unpack '+zip_path)
                     removeTheZip=False
 
                 if removeTheZip:
