@@ -86,24 +86,23 @@ sc=Chunk.latlonGrid(sc,RGBa=[1.,1.,1.,0.002],radius=(R-max_dep)*1000.)
 sc=Chunk.wholeSphereReference(sc,RGBa=[1.,1.,1.,0.002])
 
 # Add shapfeil data
-print('adding volcanic fields')
+print('adding shapefile data to scene')
 shp_bbox=[lon_rnge[0],lat_rnge[0],lon_rnge[1],lat_rnge[1]]
-volcs=sp.shapedata('global_volcanos',radius=R*1000.,buildTraces=False)
-sc=volcs.buildTraces(RGBa=[0.,0.8,0.,0.05],bbox=shp_bbox,sc=sc)
 
-print("adding state bounds")
-continents=sp.shapedata('us_states',bbox=shp_bbox,radius=R*1000.)
-sc=continents.addToScene(sc)
+for shpfi in ['us_states']:
+    thisshp=sp.shapedata(shpfi,bbox=shp_bbox,radius=R*1000.)
+    sc=thisshp.addToScene(sc)
 
-print('adding plate boundaries')
 clrs={
     'transform':[0.8,0.,0.8,0.05],
     'ridge':[0.,0.,0.8,0.05],
     'trench':[0.8,0.,0.,0.05],
+    'global_volcanos':[0.,0.8,0.,0.05]
 }
-for bound in ['transform','ridge','trench']:
+for bound in ['transform','ridge','trench','global_volcanos']:
     tect=sp.shapedata(bound,radius=R*1000.,buildTraces=False)
     sc=tect.buildTraces(RGBa=clrs[bound],sc=sc,bbox=shp_bbox)
+
 
 # some camera settings
 pos=sc.camera.position
