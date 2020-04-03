@@ -5,6 +5,7 @@ except ImportError:
     import urllib as urlrequest
 import time
 import pandas as pd
+from zipfile import ZipFile
 from yt_velmodel_vis import datafiles
 from distutils.dir_util import copy_tree
 
@@ -13,14 +14,14 @@ default_db_path=os.path.join(os.path.expanduser("~"),'.ytvelmodeldata')
 
 class filesysDB(object):
     def __init__(self,top_level_dir=None):
-        '''
+        """
         simple file system database manager
 
         Parameters
         ----------
         top_level_dir   the top level directory to search for data files. If
                         None, will check for environment variable YTVELMODELDIR
-        '''
+        """
         if top_level_dir is None:
             top_level_dir = os.environ.get('YTVELMODELDIR')
 
@@ -32,7 +33,14 @@ class filesysDB(object):
         return
 
     def buildFileDictionary(self):
-        ''' builds dictionaries of available files '''
+        """builds dictionaries of available files
+
+        Returns
+        -------
+        None
+
+
+        """
         self.FileDict = {}
         self.FilesByDir = {
             'IRIS_models':[],
@@ -50,7 +58,13 @@ class filesysDB(object):
         return
 
     def validateFile(self,fname):
-        ''' checks if file exists, returns the filename if it does, False if not '''
+        """ checks if file exists
+
+        Returns
+        -------
+        str or bool
+            returns the filename if it exists, False if not
+        """
         validFile=False
         if os.path.isfile(fname):
             validFile=fname
@@ -61,7 +75,23 @@ class filesysDB(object):
         return validFile
 
 class initializeDB(filesysDB):
-    """ initializes the filestyem database (cache)"""
+    """initializes the filestyem database (cache)
+
+    builds directory structure and fetches file. Will not fetch files that are
+    already within the directories.
+
+    Parameters
+    ----------
+    **kwargs : keyword dict with following possible parameters
+
+    top_level_dir : str
+        the top level directory of filesystem db cache. If not provided, will
+        check if the YTVELMODELDIR environment variable is set
+
+    build : bool
+        if True (default), will build the db and fetch sample files.
+        
+    """
     def __init__(self,**kwargs):
         lb=os.linesep
         print(lb+"Initializing filesystem data cache...")
@@ -80,19 +110,21 @@ class initializeDB(filesysDB):
                 raise ValueError('Could not create top level directory ' +top_level_dir)
 
         filesysDB.__init__(self,top_level_dir)
+        self.url_pause=3
+        if kwargs.get('build',True):
+            self.buildDb() # builds the initial directory framework
+            self.fetchIRIS() # fetches iris data (will not re-copy)
+            self.cpShp() # copies shapefile data
+            self.fetchNatEarth() # fetches natural earth shapefiles
 
-        self.buildDb() # builds the initial directory framework
-        self.IRIS_pause_s=3
-        self.fetchIRIS() # fetches iris data (will not re-copy)
-        self.cpShp() # copies shapefile data
-
-        print(lb+'Filesystem database initialization complete.')
-        if os.environ.get('YTVELMODELDIR') is None:
-            print(('Please set the environment variable YTVELMODELDIR'
-                   ' to '+self.db_path+' . For unix systems with bash,'
-                   ' add the following to your .bashrc or .bash_aliases file:'
-                   +lb+lb+'    export YTVELMODELDIR='+self.db_path+lb
-                   ))
+            print(lb+'Filesystem database initialization complete.')
+            if os.environ.get('YTVELMODELDIR') is None:
+                print(('Please set the environment variable YTVELMODELDIR'
+                       ' to '+self.db_path+' . For unix systems with bash,'
+                       ' add the following to your .bashrc or .bash_aliases file:'
+                       +lb+lb+'    export YTVELMODELDIR='+self.db_path+lb
+                       ))
+        return
 
     def buildDb(self):
         """ builds the top level subdirectories """
@@ -111,7 +143,12 @@ class initializeDB(filesysDB):
                     raise ValueError(msg)
 
     def fetchIRIS(self):
-        ''' fetches a number of models from IRIS '''
+        """fetches some netcdf files from IRIS, saves in local db cache
+
+        Returns
+        -------
+        None
+        """
 
         # IRIS earth models
         url_base='https://ds.iris.edu/files/products/emc/emc-files/'
@@ -146,7 +183,7 @@ class initializeDB(filesysDB):
                 except:
                     msg=('    Could not fetch '+full_url)
                     print(msg)
-                time.sleep(self.IRIS_pause_s)
+                time.sleep(self.url_pause)
             else:
                 print('    '+model+' already downloaded.')
 
@@ -174,13 +211,18 @@ class initializeDB(filesysDB):
                     df['depth_km']=6371.-df['radius_km']
 
                 df.to_csv(local_path,index=False)
-                time.sleep(self.IRIS_pause_s)
+                time.sleep(self.url_pause)
             else:
                 print('    '+model+' already downloaded.')
         return
 
     def cpShp(self):
-        ''' copies shapefile data from package to local db cache '''
+        """copies shapefile data from package to local db cache
+
+        Returns
+        -------
+        None
+        """
         dataDir=datafiles.__path__._path[0]
         shapeDest=os.path.join(self.db_path,'shapedata')
         print(os.linesep+'Copying packaged shapefile data')
@@ -190,5 +232,68 @@ class initializeDB(filesysDB):
             if os.path.isdir(fullSrc):
                 print('    copying '+shpDir)
                 copy_tree(fullSrc,fullDest,verbose=0)
+
+        return
+
+    def fetchNatEarth(self):
+        """attempts to fetch and unpack useful shapefiles from
+        https://www.naturalearthdata.com
+
+        Returns
+        -------
+        None
+
+        """
+        print(os.linesep+"Fetching remote shapefiles")
+        # build list of URLs to fetch
+        urlbase='https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/'
+
+        resolutions=['10m','50m','110m']
+        FiList=[
+            ['cultural/ne_','_admin_0_countries.zip'],
+            ['cultural/ne_','_admin_1_states_provinces.zip'],
+            ['physical/ne_','_coastline.zip'],
+        ]
+
+        full_urls=[]
+        for res in resolutions:
+            for fi in FiList:
+                thisfi=res+'/'+fi[0]+res+fi[1]
+                full_urls.append(urlbase+thisfi)
+
+        # try to fetch each one
+        shapeDest=os.path.join(self.db_path,'shapedata')
+        for fi in full_urls:
+            zipname=fi.split('/')[-1]
+            folderName=zipname.split('.')[0]
+            destDir=os.path.join(shapeDest,folderName)
+            if os.path.isdir(destDir) is False:
+                # unpacked folder doesnt exist
+                zip_path=os.path.join(shapeDest,zipname)
+                if os.path.isfile(zip_path) is False:
+                    # the zip file doesnt exist, go fetch it
+                    print('    fetching ' +zipname)
+                    try:
+                        urlrequest.urlretrieve(fi, zip_path)
+                    except:
+                        msg=('    WARNING: Could not fetch '+fi)
+                        print(msg)
+                    time.sleep(self.url_pause)
+                else:
+                    print('    '+zipname+' already downloaded')
+
+                removeTheZip=True
+                try:
+                    # unpack the zip
+                    print('    unpacking ' +zipname)
+                    with ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(destDir)
+                except:
+                    print('    WARNING: Could not unpack '+zip_path)
+                    removeTheZip=False
+
+                if removeTheZip:
+                    os.remove(zip_path)
+
 
         return

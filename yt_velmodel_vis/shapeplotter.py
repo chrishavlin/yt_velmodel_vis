@@ -327,6 +327,21 @@ def availableShapeFiles():
          'http://www-udc.ig.utexas.edu/external/plates/data.htm']
     ]
 
+    # add on the natural earth files
+    src='https://www.naturalearthdata.com/'
+    res_s={'10m':'h','50m':'m','110m':'l'}
+    for res in ['10m','50m','110m']:
+        a=res_s[res]
+        included.append(
+            ['ne_'+res+'_admin_0_countries.shp','countries_'+a,'political_boundaries',src]
+        )
+        included.append(
+            ['ne_'+res+'_admin_1_states_provinces.shp','states_'+a,'political_boundaries',src]
+        )
+        included.append(
+            ['ne_'+res+'_coastline.shp','coast_'+a,'tectonic',src]
+        )
+
     db=dm.filesysDB()
 
     shapeDict={'available':[],'details':{}}
