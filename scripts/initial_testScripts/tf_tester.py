@@ -26,7 +26,7 @@ shortname=fname.split('.')[0]
 datafld=settings['interp']['field']
 data={datafld:model.interp['data'][datafld]} # dict container for yt scene
 
-tfOb = TFs.dv(data[datafld].ravel())
+tfOb = TFs.dv(data[datafld].ravel(),bounds=[-1,4])
 tfOb.piecewiseLinear([-5,-0.1,.05,1.],alpha_max=0.9)
 
 
@@ -34,7 +34,6 @@ f=plt.figure()
 ax=plt.axes()
 ax=tfOb.addHist(ax=ax,density=True,color=(0.,0.,0.,1.))
 ax=tfOb.addTFtoPlot(ax=ax)
-
 
 if os.path.exists(out_dir) is False:
     os.mkdir(out_dir)
