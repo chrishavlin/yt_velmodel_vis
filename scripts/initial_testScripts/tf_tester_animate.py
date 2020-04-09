@@ -18,9 +18,9 @@ settings={
     'interp':{'field':'dvs','max_dist':50000,'res':[10000,10000,10000],
               'input_units':'m','interpChunk':int(1e7)},
     'sigma_clip':.4,
-    'res_factor':1,
+    'res_factor':3,
 }
-out_dir='./output/tf_tester' # output directory for figures
+out_dir='./output/tf_tester/animate' # output directory for figures
 
 # load the model
 model=sm.netcdf(fname,settings['interp'])
@@ -105,86 +105,33 @@ def plotSaveTf(tfOb,savename):
     plt.savefig(os.path.join(out_dir,savename+'.png'))
     return
 
-def TF_test_1():
-    sn='TF_test_1'
+def TF_test_6(centerval,dvwid=1,cmap='summer_r'):
     tfOb = TFs.dv(data[datafld].ravel(),bounds=[-4,4])
-    tfOb.piecewiseLinear([-1.,-0.1,.05,.55],alpha_max=0.7,cmap='kelp_r')
-    return (tfOb,sn)
-
-def TF_test_2():
-    sn='TF_test_2'
-    tfOb = TFs.dv(data[datafld].ravel(),bounds=[-1,1])
-    alpha=.75*abs(erf(tfOb.dvbins_c/.3))
-    tfOb.addTFsegment(alpha)
-    return (tfOb,sn)
-
-def TF_test_3():
-    sn='TF_test_3'
-    tfOb = TFs.dv(data[datafld].ravel(),bounds=[-2,2])
-    alpha=np.full(tfOb.dvbins_c.shape,0.5)
-    tfOb.addTFsegment(alpha)
-    return (tfOb,sn)
-
-def TF_test_4():
-    sn='TF_test_4'
-    tfOb = TFs.dv(data[datafld].ravel(),bounds=[-4,4])
-    TFseg=TFs.TFsegment(tfOb,bounds=[-2,-.5],cmap='OrRd_r')
-    alpha=np.full(TFseg.dvbins_c.shape,0.5)
-    tfOb.addTFsegment(alpha,TFseg)
-
-    TFseg2=TFs.TFsegment(tfOb,bounds=[.2,2],cmap='cool')
-    alpha2=np.full(TFseg2.dvbins_c.shape,0.7)
-    tfOb.addTFsegment(alpha2,TFseg2)
-    return (tfOb,sn)
-
-
-def TF_test_5():
-    sn='TF_test_5'
-    tfOb = TFs.dv(data[datafld].ravel(),bounds=[-4,4])
-
-
-    TFseg=TFs.TFsegment(tfOb,bounds=[-2,-.5],cmap='OrRd_r')
-    dv=TFseg.dvbins_c # dv in this segment
-    dvcenter=dv.mean()
-    alpha=erfc((dv-dvcenter)/.25)/2. * 0.5+.4
-    tfOb.addTFsegment(alpha,TFseg)
-
-    TFseg2=TFs.TFsegment(tfOb,bounds=[.2,3],cmap='cool')
-    dv=TFseg2.dvbins_c # dv in this segment
-    dvcenter=dv.mean()
-    alpha2=(1+erf((dv-dvcenter)/.5))/2*0.5+.4
-
-    tfOb.addTFsegment(alpha2,TFseg2)
-    return (tfOb,sn)
-
-
-def TF_test_6():
-    sn='TF_test_6'
-    tfOb = TFs.dv(data[datafld].ravel(),bounds=[-4,4])
-
-    dvwid=1
-    centerval=-1.2
     bnds=[centerval-dvwid/2,centerval+dvwid/2]
-    TFseg=TFs.TFsegment(tfOb,bounds=bnds,cmap='OrRd')
+    TFseg=TFs.TFsegment(tfOb,bounds=bnds,cmap=cmap)
     dv=TFseg.dvbins_c # dv in this segment
-    slope = -.4 / (TFseg.bounds[1]-TFseg.bounds[0])
-    alpha=.8 + (dv-dv[0]) * slope
+    alpha=np.full(TFseg.dvbins_c.shape,0.6)
     tfOb.addTFsegment(alpha,TFseg)
 
-    bnds=[.1,.6]
-    TFseg2=TFs.TFsegment(tfOb,bounds=bnds,cmap='cool')
-    dv=TFseg2.dvbins_c # dv in this segment
-    slope = (.4) / (TFseg2.bounds[1]-TFseg2.bounds[0])
-    alpha=.4 + (dv-dv[0]) * slope
-    tfOb.addTFsegment(alpha,TFseg2)
+    return tfOb
 
-    return (tfOb,sn)
-
-TFtests=[TF_test_1,TF_test_2,TF_test_3,TF_test_4,TF_test_5,TF_test_6]
-
-for TFtest in TFtests:
-    tfOb,savename=TFtest()
-    plotSaveTf(tfOb,savename+'_TF')
+frame=0
+for centerval in np.linspace(-2,-.51,20):
+    framestr=str(frame).zfill(3)
+    tfOb=TF_test_6(centerval,0.5,'OrRd')
+    plotSaveTf(tfOb,'hot_TF'+framestr)
     source.set_transfer_function(tfOb.tf) # apply the TF and render it
-    nm=savename+'_vol.png'
+    nm='hot_vol_'+framestr+'.png'
     sc.save(os.path.join(out_dir,nm),sigma_clip=settings.get('sigma_clip', 2))
+    frame=frame+1
+
+
+frame=0
+for centerval in np.linspace(1.,.251,20):
+    framestr=str(frame).zfill(3)
+    tfOb=TF_test_6(centerval,0.25,'cool')
+    plotSaveTf(tfOb,'cold_TF'+framestr)
+    source.set_transfer_function(tfOb.tf) # apply the TF and render it
+    nm='cold_vol_'+framestr+'.png'
+    sc.save(os.path.join(out_dir,nm),sigma_clip=settings.get('sigma_clip', 2))
+    frame=frame+1
