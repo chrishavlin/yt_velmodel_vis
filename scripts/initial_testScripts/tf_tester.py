@@ -146,7 +146,7 @@ def TF_test_5():
     TFseg=TFs.TFsegment(tfOb,bounds=[-2,-.5],cmap='OrRd_r')
     dv=TFseg.dvbins_c # dv in this segment
     dvcenter=dv.mean()
-    alpha=erfc((dv-dvcenter)/.25)/2. * 0.5+.4
+    alpha=erfc((dv-dvcenter)/.25)/2. * 0.5+.4 # transmission coefficient for this bin
     tfOb.addTFsegment(alpha,TFseg)
 
     TFseg2=TFs.TFsegment(tfOb,bounds=[.2,3],cmap='cool')
