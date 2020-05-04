@@ -192,7 +192,7 @@ def TF_test_7():
 
     bnds=[-2,-.2]
     TFseg=TFs.TFsegment(tfOb,bounds=bnds,cmap='OrRd')
-    histData,_=tfOb.calcHist(bounds=bnds)    
+    histData,_=tfOb.calcHist(bounds=bnds)
     tfOb.addTFsegment(alphaHist(histData,.8,0.3),TFseg)
 
     bnds=[.2,1.5]
@@ -202,8 +202,7 @@ def TF_test_7():
     return (tfOb,sn)
 
 
-# TFtests=[TF_test_1,TF_test_2,TF_test_3,TF_test_4,TF_test_5,TF_test_6,TF_test_7]
-TFtests=[TF_test_7]
+TFtests=[TF_test_1,TF_test_2,TF_test_3,TF_test_4,TF_test_5,TF_test_6,TF_test_7]
 
 for TFtest in TFtests:
     tfOb,savename=TFtest()
