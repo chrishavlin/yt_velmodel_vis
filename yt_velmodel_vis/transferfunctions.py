@@ -15,7 +15,7 @@ class TFsegment(object):
             # find the dvbins for bounds for this part of the TF
             self.findSubBins(TFob.dvbins,TFob.dvbins_c,bnds)
         self.nbins=self.dvbins_c.size
-        self.bounds=bnds 
+        self.bounds=bnds
 
         # set color map for this TF addition
         cmap_name=kwargs.get('cmap','Blue-Red_r')
@@ -51,10 +51,40 @@ class dv(object):
         self.tf=yt.ColorTransferFunction((self.bounds[0],self.bounds[1]))
         self.dvbins= np.linspace(self.bounds[0],self.bounds[1],self.tf.nbins)
         self.dvbins_c=(self.dvbins[0:-1]+self.dvbins[1:])/2 # bin centers
+        self.histData,_=self.calcHist()
 
         return
 
+    def calcHist(self,bounds=None,density=True):
+        """calculates histogram data for current field
 
+        Parameters
+        ----------
+        bounds : list
+            two-element list with min/max of range for histogram. If None, will
+            use self.bounds from initialization.
+        density : boolean
+            returns normalized histogram if True (default is True).
+
+        Returns
+        -------
+        ndarray
+            histogram values
+
+        ndarray
+            histogram bin edges
+
+        """
+
+        if bounds is None:
+            bounds=self.bounds
+            bin_edges=self.dvbins
+        elif isinstance(bounds,list) and len(bounds)==2:
+            bin_edges=self.dvbins[(self.dvbins>=bounds[0])&(self.dvbins<=bounds[1])]
+        else:
+            raise TypeError("bounds must be a 2-element list with min/max of range")
+
+        return np.histogram(self.data,bins=bin_edges,density=density)
 
     def piecewiseLinear(self,dv_pts=[],**kwargs):
         """ piecewise linear transfer function
