@@ -29,7 +29,7 @@ setup(name='yt_velmodel_vis',
                       ['datafiles/harvard-glb-volc-shapefile/*',
                        'datafiles/cb_2018_us_state_20m/*']
                    },
-      install_requires=['yt','geopandas'],
+      install_requires=['yt','geopandas','imageio'],
       cmdclass={
         'develop': PostDevelopCommand,
         'install': PostInstallCommand,
