@@ -1,15 +1,6 @@
 # yt_velmodel_vis
 yt visualizations of seismic velocity models
 
-# dependencies:
-the yt package (https://yt-project.org) is required.
-
-`geopandas` is also required. It has a number of dependencies itself including `pandas` and `shapely`, so easiest
-to install with pip or conda.
-
-* For conda: `conda install geopandas`
-* For pip: `pip install geopandas`
-
 # setting up yt_velmodel_vis
 
 After you have the above dependencies installed, you can install this package in two steps:
