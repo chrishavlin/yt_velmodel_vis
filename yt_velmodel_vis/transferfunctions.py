@@ -55,14 +55,14 @@ class dv(object):
 
         return
 
-    def calcHist(self,bounds=None,density=True):
+    def calcHist(self,bin_edges=None,density=True):
         """calculates histogram data for current field
 
         Parameters
         ----------
-        bounds : list
-            two-element list with min/max of range for histogram. If None, will
-            use self.bounds from initialization.
+        bin_edges : array-like
+            the bin edges to use for the histogram (if None, will use full range
+            of bins)
         density : boolean
             returns normalized histogram if True (default is True).
 
@@ -76,13 +76,9 @@ class dv(object):
 
         """
 
-        if bounds is None:
+        if bin_edges is None:
             bounds=self.bounds
             bin_edges=self.dvbins
-        elif isinstance(bounds,list) and len(bounds)==2:
-            bin_edges=self.dvbins[(self.dvbins>=bounds[0])&(self.dvbins<=bounds[1])]
-        else:
-            raise TypeError("bounds must be a 2-element list with min/max of range")
 
         return np.histogram(self.data,bins=bin_edges,density=density)
 
