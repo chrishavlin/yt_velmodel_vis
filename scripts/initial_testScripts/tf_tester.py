@@ -15,11 +15,13 @@ from scipy.special import erf,erfc
 # choose model and plot settings
 fname='NWUS11-S_percent.nc' # model selection
 settings={
-    'interp':{'field':'dvs','max_dist':50000,'res':[10000,10000,10000],
-              'input_units':'m','interpChunk':int(1e7)},
     'sigma_clip':.4,
     'res_factor':1,
 }
+# settings['interp']={'field':'dvs','max_dist':50000,'res':[10000,10000,10000],
+#           'input_units':'m','interpChunk':int(1e7)}
+settings['interp']={'field':'dvs','max_dist':50000,'res':[30000,30000,30000],
+          'input_units':'m','interpChunk':int(1e7)}
 out_dir='./output/tf_tester' # output directory for figures
 
 # load the model
@@ -192,12 +194,12 @@ def TF_test_7():
 
     bnds=[-2,-.2]
     TFseg=TFs.TFsegment(tfOb,bounds=bnds,cmap='OrRd')
-    histData,_=tfOb.calcHist(bounds=bnds)
+    histData,_=tfOb.calcHist(bin_edges=TFseg.dvbins)
     tfOb.addTFsegment(alphaHist(histData,.8,0.3),TFseg)
 
     bnds=[.2,1.5]
     TFseg=TFs.TFsegment(tfOb,bounds=bnds,cmap='cool')
-    histData,_=tfOb.calcHist(bounds=bnds)
+    histData,_=tfOb.calcHist(bin_edges=TFseg.dvbins)
     tfOb.addTFsegment(alphaHist(histData,.8,0.3),TFseg)
     return (tfOb,sn)
 
