@@ -156,7 +156,7 @@ def addShapeToScene(sc,lats,lons,rads,src_type='LineSource',RGBa=[1.,1.,1.,0.005
 
     parameters
     ----------
-    sc              a yt scene instance
+    sc              a yt scene instance or an empty list
     lats, lons      latitude and longitude, can be scalar int or float, lists or
                     arrays of the same size and shape
     rads            radius, single value scalar or list/array same shape as
@@ -173,7 +173,10 @@ def addShapeToScene(sc,lats,lons,rads,src_type='LineSource',RGBa=[1.,1.,1.,0.005
     '''
 
     shp=shapeTrace(lats,lons,rads)
-    sc.add_source(shp.buildYtSource(src_type=src_type,RGBa=RGBa,pt_size=pt_size))
+    if type(sc)==list:
+        sc.append(shp)
+    else:
+        sc.add_source(shp.buildYtSource(src_type=src_type,RGBa=RGBa,pt_size=pt_size))
     return sc
 
 class sphericalChunk(object):
@@ -181,7 +184,7 @@ class sphericalChunk(object):
 
     class for adding annotations to a spherical chunk in cartesian coordinates
 
-    sc=sphericalChunk(lat_range,lon_range,radius_range)
+    SC=sphericalChunk(lat_range,lon_range,radius_range)
 
     parameters
     ----------
@@ -202,7 +205,7 @@ class sphericalChunk(object):
 
         parameters
         ----------
-        sc              a yt scene instance
+        sc              a yt scene instance or an empty list
         RGBa            (optional) The RGBa value to use for all points or line
                         segements, default is [1.,1.,1.,0.005]
         n_latlon        (optional) number of points to use to create line segments

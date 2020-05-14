@@ -90,7 +90,7 @@ class initializeDB(filesysDB):
 
     build : bool
         if True (default), will build the db and fetch sample files.
-        
+
     """
     def __init__(self,**kwargs):
         lb=os.linesep
@@ -130,7 +130,7 @@ class initializeDB(filesysDB):
         """ builds the top level subdirectories """
         # build the subdirectories
         print(os.linesep+"Building directory structure at "+self.db_path)
-        for db_dir in ['IRIS_models','shapedata','IRIS_refModels','interpolated_models']:
+        for db_dir in ['IRIS_models','shapedata','IRIS_refModels','interpolated_models','output']:
             newdir=os.path.join(self.db_path,db_dir)
             if os.path.isdir(newdir) is True:
                 print('    '+db_dir+' already exists')
