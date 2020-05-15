@@ -59,7 +59,7 @@ def cart2sphere(x,y,z,geo=True):
     (R,lat,lon) : tuple of cartesian radius, lat and lon (lat,lon in degrees)
 
     """
-    seis_model.cart2sphere
+    
     xy = x**2 + y**2
     R = np.sqrt(xy + z**2)
     lat = np.arctan2(np.sqrt(xy), z)*180./np.pi
@@ -521,7 +521,7 @@ class netcdf(object):
                 i_1=i_0+chunk
                 if i_1>N_grid:
                     i_1=N_grid
-                pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))                
+                pts=np.column_stack((xdata[i_0:i_1],ydata[i_0:i_1],zdata[i_0:i_1]))
                 indxs=np.array(range(i_0,i_1)) # the linear indeces of this chunk
                 for fi in fields:
                     (dists,tree_indxs)=trees[fi]['tree'].query(pts,k=8,distance_upper_bound=max_dist)

@@ -109,3 +109,4 @@ scripts/output/*png
 *.png
 *.npy
 *.gif
+*.obj
