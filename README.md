@@ -3,6 +3,8 @@ yt visualizations of seismic velocity models
 
 # setting up yt_velmodel_vis
 
+This repo relies on git-lfs, so you'll need to install it before cloning this repo: https://git-lfs.github.com/
+
 After you have the above dependencies installed, you can install this package in two steps:
 1.  package installation with `pip`
 2.  (optional) setting environment variables and initializing the local database
